@@ -56,6 +56,12 @@ function gocardless_link($params) {
     if ( ! $params['oneoffonly']) {
 
         // Calculate Max Required Amount for Pre-Auth
+        $query = mysql_query("SELECT tblproducts.id, tblproducts.name FROM tblinvoiceitems INNER JOIN tblhosting ON tblinvoiceitems.relid = tblhosting.id INNER JOIN tblproducts ON tblhosting.packageid = tblproducts.id WHERE tblinvoiceitems.invoiceid = ".$params['invoiceid']." GROUP BY tblproducts.id");
+        if (mysql_num_rows($query) == 1) {
+          $data = mysql_fetch_array($query);
+          $description = $data['name'];
+        }
+
         $result = select_query("tblinvoiceitems", "type,relid,amount,taxed", array('invoiceid' => $params['invoiceid']));
         while ($data = mysql_fetch_array($result)) {
 
@@ -128,6 +134,7 @@ function gocardless_link($params) {
       $title = 'Create Subscription with GoCardless';
       $url = GoCardless::new_pre_authorization_url(array(
         'max_amount'      => $maxamount,
+        'name'            => $description,
         'interval_length' => $recurfrequency,
         'interval_unit'   => 'month',
         'user'            => $user,
