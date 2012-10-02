@@ -19,14 +19,26 @@ $gateway = getGatewayVariables('gocardless');
 if ( ! $gateway['type']) {
   die('Module not activated.');
 }
-
-GoCardless::set_account_details(array(
-  'app_id'        => $gateway['app_id'],
-  'app_secret'    => $gateway['app_secret'],
-  'merchant_id'   => $gateway['merchant_id'],
-  'access_token'  => $gateway['access_token'],
-  'ua_tag'        => 'gocardless-whmcs/v' . GC_WHMCS_VERSION
-));
+if($gateway['test_mode']=='on'){
+	GoCardless::set_account_details(array(
+	  'app_id'        => $gateway['dev_app_id'],
+	  'app_secret'    => $gateway['dev_app_secret'],
+	  'merchant_id'   => $gateway['dev_merchant_id'],
+	  'access_token'  => $gateway['dev_access_token'],
+	  'test_mode'     => $gateway['test_mode'],
+	  'ua_tag'        => 'gocardless-whmcs/v' . GC_WHMCS_VERSION
+	));
+} else {
+	GoCardless::set_account_details(array(
+	  'app_id'        => $gateway['app_id'],
+	  'app_secret'    => $gateway['app_secret'],
+	  'merchant_id'   => $gateway['merchant_id'],
+	  'access_token'  => $gateway['access_token'],
+	  'test_mode'     => $gateway['test_mode'],
+	  'ua_tag'        => 'gocardless-whmcs/v' . GC_WHMCS_VERSION
+	));
+	
+}
 
 $webhook = file_get_contents('php://input');
 $webhook_array = json_decode($webhook, true);
@@ -154,6 +166,6 @@ if ($webhook_valid == true) {
 
 } else {
 
-  header('HTTP/1.1 403 Invalid signature');
+  header('HTTP/1.1 403 Invalid signature'.$gateway['app_secret']);
 
 }

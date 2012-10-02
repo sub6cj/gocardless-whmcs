@@ -18,9 +18,13 @@ function gocardless_config() {
     'app_id'        => array('FriendlyName' => 'App ID', 'Type' => 'text', 'Size' => '100'),
     'app_secret'    => array('FriendlyName' => 'App Secret', 'Type' => 'text', 'Size' => '100'),
     'access_token'  => array('FriendlyName' => 'Access Token', 'Type' => 'text', 'Size' => '100'),
+    'dev_merchant_id'   => array('FriendlyName' => 'Development Merchant ID', 'Type' => 'text', 'Size' => '15', 'Description' => '<a href="http://gocardless.com/merchants/new">Sign up</a> for a GoCardless account then find your API keys in the Developer tab'),
+    'dev_app_id'        => array('FriendlyName' => 'Development App ID', 'Type' => 'text', 'Size' => '100'),
+    'dev_app_secret'    => array('FriendlyName' => 'Development App Secret', 'Type' => 'text', 'Size' => '100'),
+    'dev_access_token'  => array('FriendlyName' => 'Development Access Token', 'Type' => 'text', 'Size' => '100'),
     'oneoffonly'    => array('FriendlyName' => 'One Off Only', 'Type' => 'yesno', 'Description' => 'Tick to only perform one off captures - no recurring pre-auth agreements'),
     'instantpaid' => array('FriendlyName' => 'Instant Activation', 'Type' => 'yesno', 'Description' => 'Tick to immediately mark invoices paid after payment is initiated (despite clearing not being confirmed for 3-5 days)', ),
-    'testmode' => array('FriendlyName' => 'Test Mode', 'Type' => 'yesno', 'Description' => 'Tick to enable test mode', ),
+    'test_mode' => array('FriendlyName' => 'Test Mode', 'Type' => 'yesno', 'Description' => 'Tick to enable test mode', ),
   );
 
   return $configarray;
@@ -95,13 +99,27 @@ function gocardless_link($params) {
     }
 
     // Initialise Account Details
-    GoCardless::set_account_details(array(
-      'app_id'        => $params['app_id'],
-      'app_secret'    => $params['app_secret'],
-      'merchant_id'   => $params['merchant_id'],
-      'access_token'  => $params['access_token'],
-      'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
-    ));
+    if ($params['test_mode'] == 'on'){
+		GoCardless::set_account_details(array(
+		  'app_id'        => $params['dev_app_id'],
+		  'app_secret'    => $params['dev_app_secret'],
+		  'merchant_id'   => $params['dev_merchant_id'],
+		  'access_token'  => $params['dev_access_token'],
+		  'test_mode'	  => $params['test_mode'],
+		  'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+		  'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
+		));
+	} else {
+		GoCardless::set_account_details(array(
+		  'app_id'        => $params['app_id'],
+		  'app_secret'    => $params['app_secret'],
+		  'merchant_id'   => $params['merchant_id'],
+		  'access_token'  => $params['access_token'],
+		  'test_mode'	  => $params['test_mode'],
+		   'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+		   'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
+		));
+	}
 
     $user = array(
       'first_name'        => $params['clientdetails']['firstname'],
@@ -154,15 +172,27 @@ function gocardless_link($params) {
 function gocardless_capture($params) {
 
   gocardless_createdb();
-
-  GoCardless::set_account_details(array(
-    'app_id'        => $params['app_id'],
-    'app_secret'    => $params['app_secret'],
-    'merchant_id'   => $params['merchant_id'],
-    'access_token'  => $params['access_token'],
-    'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
-  ));
-
+  if($params['test_mode']=='on'){
+	  GoCardless::set_account_details(array(
+	  'app_id'        => $params['dev_app_id'],
+	  'app_secret'    => $params['dev_app_secret'],
+	  'merchant_id'   => $params['dev_merchant_id'],
+	  'access_token'  => $params['dev_access_token'],
+	  'test_mode' 	=> $params['test_mode'],
+	  'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+	  'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
+	  ));
+  } else {
+	  GoCardless::set_account_details(array(
+	    'app_id'        => $params['app_id'],
+	    'app_secret'    => $params['app_secret'],
+	    'merchant_id'   => $params['merchant_id'],
+	    'access_token'  => $params['access_token'],
+		'test_mode' 	=> $params['test_mode'],
+	    'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+		  'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
+	  ));
+  }
   $existing_payment_query = select_query('mod_gocardless', 'resource_id', array('invoiceid' => $params['invoiceid']));
   $existing_payment = mysql_fetch_assoc($existing_payment_query);
 

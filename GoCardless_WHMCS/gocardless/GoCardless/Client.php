@@ -73,8 +73,10 @@ class GoCardless_Client {
     }
 
     // If environment is not set then default to production
-    if ( ! isset(GoCardless::$environment)) {
+    if ( !($this->account_details['test_mode'])=='on') {
       GoCardless::$environment = 'production';
+    } else {
+      GoCardless::$environment = 'sandbox';
     }
 
     // Take base_url from array
@@ -84,6 +86,14 @@ class GoCardless_Client {
     } else {
       // Otherwise set it based on environment
       $this->base_url = self::$base_urls[GoCardless::$environment];
+    }
+    // Take redirect from array
+    if (isset($account_details['redirect_uri'])) {
+      $this->redirect_uri = $account_details['redirect_uri'];
+      unset($account_details['redirect_uri']);
+    } else {
+      // Otherwise set it based on environment
+      $this->redirect_uri = '';
     }
 
   }
@@ -283,17 +293,14 @@ class GoCardless_Client {
       }
       $data[$value] = $params[$value];
     }
-
     // state is optional
     if (isset($params['state'])) {
       $data['state'] = $params['state'];
     }
-
     // resource_uri is optional
     if (isset($params['resource_uri'])) {
       $data['resource_uri'] = $params['resource_uri'];
     }
-
     $sig_validation_data = array(
       'data'      => $data,
       'secret'    => $this->account_details['app_secret'],
@@ -303,7 +310,6 @@ class GoCardless_Client {
     if ($this->validate_signature($sig_validation_data) == false) {
       throw new GoCardless_SignatureException();
     }
-
     // Sig valid, now send confirm request
     $confirm_params = array(
       'resource_id'   => $params['resource_id'],
@@ -321,7 +327,7 @@ class GoCardless_Client {
 
     // Do query
     $response = $this->request('post', $endpoint, $confirm_params);
-
+   
     if ($response['success'] == true) {
 
       $endpoint = '/' . $params['resource_type'] . 's/' .
@@ -419,7 +425,6 @@ class GoCardless_Client {
 
     // If there is no http_authorization, try checking for access_token
     if ( ! isset($params['http_authorization'])) {
-
       // No http_authorization and no access_token? Fail
       if ( ! isset($this->account_details['access_token'])) {
         throw new GoCardless_ClientException('Access token missing');
@@ -429,7 +434,6 @@ class GoCardless_Client {
       $params['http_bearer'] = $this->account_details['access_token'];
 
     }
-
     // Set application specific user agent suffix if found
     if (isset($this->account_details['ua_tag'])) {
       $params['ua_tag'] = $this->account_details['ua_tag'];
@@ -446,7 +450,6 @@ class GoCardless_Client {
       $url = $this->base_url . self::$api_path . $endpoint;
 
     }
-
     // Call Request class (might be aliased for testing) with URL & params
     return call_user_func(GoCardless::getClass('Request').'::'.$method, $url,
       $params);

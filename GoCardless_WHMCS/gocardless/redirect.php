@@ -18,17 +18,26 @@ $gateway = getGatewayVariables('gocardless');
 if ( ! $gateway['type']) {
   die("Module Not Activated");
 }
-
-GoCardless::set_account_details(array(
-  'app_id'        => $gateway['app_id'],
-  'app_secret'    => $gateway['app_secret'],
-  'merchant_id'   => $gateway['merchant_id'],
-  'access_token'  => $gateway['access_token'],
-  'ua_tag'        => 'gocardless-whmcs/v' . GC_WHMCS_VERSION
-));
-
+if ($gateway['test_mode'] == 'on'){
+	GoCardless::set_account_details(array(
+	'app_id'        => $gateway['dev_app_id'],
+	'app_secret'    => $gateway['dev_app_secret'],
+	'merchant_id'   => $gateway['dev_merchant_id'],
+	'access_token'  => $gateway['dev_access_token'],
+	'test_mode'	    => $gateway['test_mode'],
+	'ua_tag'        => 'gocardless-whmcs/v' . GC_WHMCS_VERSION
+	));
+} else {
+	GoCardless::set_account_details(array(
+	  'app_id'        => $gateway['app_id'],
+	  'app_secret'    => $gateway['app_secret'],
+	  'merchant_id'   => $gateway['merchant_id'],
+	  'access_token'  => $gateway['access_token'],
+	  'test_mode'	  => $gateway['test_mode'],
+	  'ua_tag'        => 'gocardless-whmcs/v' . GC_WHMCS_VERSION
+	));
+}
 if (isset($_GET['resource_id']) && isset($_GET['resource_type'])) {
-
   $confirmed_resource = GoCardless::confirm_resource(array(
     'resource_id'   => $_GET['resource_id'],
     'resource_type' => $_GET['resource_type'],
@@ -36,7 +45,6 @@ if (isset($_GET['resource_id']) && isset($_GET['resource_type'])) {
     'signature'     => $_GET['signature'],
     'state'         => $_GET['state']
   ));
-
   $gc_invoice_data = explode(':', $_GET['state']);
   $gc_invoice = array(
     'id'      => $gc_invoice_data[0],
