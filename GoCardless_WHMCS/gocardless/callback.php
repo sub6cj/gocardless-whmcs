@@ -43,15 +43,12 @@ if($gateway['test_mode']=='on'){
 $webhook = file_get_contents('php://input');
 $webhook_array = json_decode($webhook, true);
 $webhook_valid = GoCardless::validate_webhook($webhook_array['payload']);
-
 if ($webhook_valid == true) {
-
   $val = $webhook_array['payload'];
   $resource_type = $val['resource_type'];
   $action = $val['action'];
 
   if ($action=="paid") {
-
   foreach ($webhook_array['payload']['bills'] as $key => $val) {
 
     $resourceid = $val['source_id'];
@@ -59,10 +56,9 @@ if ($webhook_valid == true) {
     $transid = $val['id'];
 
     $query = "SELECT gc.invoiceid AS invoiceid, i.total AS total FROM tblinvoices i, mod_gocardless gc WHERE gc.invoiceid = i.id AND gc.resource_id = '".db_escape_string($transid)."'";
-    $d = full_query($query);
+  	$d = full_query($query);
 
     if (mysql_num_rows($d)) {
-
       $res = mysql_fetch_assoc($d);
 
       $invoiceid = $res['invoiceid'];
@@ -86,19 +82,16 @@ if ($webhook_valid == true) {
     } else {
 
       $bill = GoCardless_Bill::find($transid);
-
       if ($status == 'paid') {
 
         $query = "SELECT tblinvoiceitems.invoiceid,tblinvoices.userid FROM tblhosting INNER JOIN tblinvoiceitems ON tblhosting.id = tblinvoiceitems.relid INNER JOIN tblinvoices ON tblinvoices.id = tblinvoiceitems.invoiceid WHERE tblinvoices.status = 'Unpaid' AND tblhosting.subscriptionid = '$resourceid' AND tblinvoiceitems.type = 'Hosting' ORDER BY tblinvoiceitems.invoiceid ASC";
         $d = full_query($query);
-
         $res = mysql_fetch_array($d);
 
         $invoiceid = $res['invoiceid'];
         $userid = $res['userid'];
 
         if ($invoiceid) {
-
           $mc_gross = $bill->amount;
 
           $m = "Invoice Found from Subscription ID Match => $invoiceid\n";
@@ -108,7 +101,6 @@ if ($webhook_valid == true) {
 
           $result = select_query('tblcurrencies', '', array('code' => 'GBP'));
           $data = mysql_fetch_assoc($result);
-
           $currencyid = $data['id'];
           $currencyconvrate = $data['rate'];
 
@@ -144,19 +136,22 @@ if ($webhook_valid == true) {
 
   } elseif ($action=="cancelled") {
 
-    foreach ($webhook_array['payload']['subscriptions'] as $key => $val) {
-
-        $id = $val['id'];
-
-        delete_query("mod_gocardless",array("resource_id"=>$resource_id));
-
-    }
-
     foreach ($webhook_array['payload']['pre_authorizations'] as $key => $val) {
+        $id = $val['id'];        
+        // checkes pre-authorization exists
+        // if yes update entry from tblhosting so no generating new invoices against this pre-auth
+        // log results 
+        // existing invoices are retained
 
-        $id = $val['id'];
-
-        delete_query("mod_gocardless",array("resource_id"=>$resource_id));
+        $result = select_query('tblhosting', '', array('subscriptionid' => $id));
+        $data = mysql_fetch_assoc($result);
+        
+		if($data['id']){
+          update_query("tblhosting",array("subscriptionid"=>''),array("subscriptionid"=>$id));
+          logTransaction($gateway['name'], print_r($val, 1), 'Successful');
+		} else {
+          logTransaction($gateway['name'], print_r($val, 1), 'Unsuccessful');			
+		}
 
     }
 
@@ -166,6 +161,6 @@ if ($webhook_valid == true) {
 
 } else {
 
-  header('HTTP/1.1 403 Invalid signature'.$gateway['app_secret']);
+  header('HTTP/1.1 403 Invalid signature');
 
 }
