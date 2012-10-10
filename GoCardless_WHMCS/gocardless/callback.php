@@ -7,7 +7,7 @@
     * @version 0.1.0
     */
 
-    # load in all required files
+    # load all required files
     $whmcsdir = dirname(__FILE__) . '/../../../';
     require_once $whmcsdir . 'dbconnect.php';
     require_once $whmcsdir . '/includes/functions.php';
@@ -19,31 +19,11 @@
     # get gateway params using WHMCS getGatewayVariables method
     $gateway = getGatewayVariables('gocardless');
 
-    # verify the gateway is installed
-    if (!$gateway['type']) {
-        die('Module not activated.');
-    }
+    # sanity check to ensure module is active
+    if (!$gateway['type']) die("Module Not Activated");
 
-    # check if we are running testmode or not and set the API params accordingly
-    if($gateway['test_mode']=='on'){
-        GoCardless::set_account_details(array(
-                'app_id'        => $gateway['dev_app_id'],
-                'app_secret'    => $gateway['dev_app_secret'],
-                'merchant_id'   => $gateway['dev_merchant_id'],
-                'access_token'  => $gateway['dev_access_token'],
-                'test_mode'     => $gateway['test_mode'],
-                'ua_tag'        => 'gocardless-whmcs/v' . GC_WHMCS_VERSION
-            ));
-    } else {
-        GoCardless::set_account_details(array(
-                'app_id'        => $gateway['app_id'],
-                'app_secret'    => $gateway['app_secret'],
-                'merchant_id'   => $gateway['merchant_id'],
-                'access_token'  => $gateway['access_token'],
-                'test_mode'     => $gateway['test_mode'],
-                'ua_tag'        => 'gocardless-whmcs/v' . GC_WHMCS_VERSION
-            ));
-    }
+    # set relevant API information for GoCardless module
+    gocardless_set_account_details($gateway);
 
     # get the raw contents of the callback and decode JSON
     $webhook = file_get_contents('php://input');
@@ -73,6 +53,7 @@
                 $result = full_query($query);
 				
 				# if one or more rows were returned
+				# (this happens when the bill has already been created in the database)
 				if (mysql_num_rows($result)) {
 					# get associative array and store in $res
                     $res = mysql_fetch_assoc($result);
@@ -84,8 +65,8 @@
 					
 					# SANITY checks
 					# verify the invoiceID, this will verify and if necessary kill and log the error
-                    $invoiceid = checkCbInvoiceID($invoiceid, $gateway['name']);
-					# halt script execution if a transaction by $transid has already been found
+                    checkCbInvoiceID($invoiceid, $gateway['name']);
+					# halt script execution if a transaction with the SAME bill ID has been found
                     checkCbTransID($transid);
 
 					# if we get to this point, we have verified the callback
