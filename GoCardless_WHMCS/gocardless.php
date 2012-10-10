@@ -19,20 +19,65 @@
     function gocardless_config() {
 
         $aConfig = array(
-            'FriendlyName'  => array('Type' => 'System', 'Value' => 'GoCardless'),
-            'merchant_id'   => array('FriendlyName' => 'Merchant ID', 'Type' => 'text', 'Size' => '15', 'Description' => '<a href="http://gocardless.com/merchants/new">Sign up</a> for a GoCardless account then find your API keys in the Developer tab'),
-            'app_id'        => array('FriendlyName' => 'App ID', 'Type' => 'text', 'Size' => '100'),
-            'app_secret'    => array('FriendlyName' => 'App Secret', 'Type' => 'text', 'Size' => '100'),
-            'access_token'  => array('FriendlyName' => 'Access Token', 'Type' => 'text', 'Size' => '100'),
-            'oneoffonly'    => array('FriendlyName' => 'One Off Only', 'Type' => 'yesno', 'Description' => 'Tick to only perform one off captures - no recurring pre-auth agreements'),
-            'instantpaid'     => array('FriendlyName' => 'Instant Activation', 'Type' => 'yesno', 'Description' => 'Tick to immediately mark invoices paid after payment is initiated (despite clearing not being confirmed for 3-5 days)', ),
-            'testmode'         => array('FriendlyName' => 'Test Mode', 'Type' => 'yesno', 'Description' => 'Tick to enable test mode', ),
+            'FriendlyName'      => array('Type' => 'System', 'Value' => 'GoCardless'),
+            'merchant_id'       => array('FriendlyName' => 'Merchant ID', 'Type' => 'text', 'Size' => '15', 'Description' => '<a href="http://gocardless.com/merchants/new">Sign up</a> for a GoCardless account then find your API keys in the Developer tab'),
+            'app_id'            => array('FriendlyName' => 'App ID', 'Type' => 'text', 'Size' => '100'),
+            'app_secret'        => array('FriendlyName' => 'App Secret', 'Type' => 'text', 'Size' => '100'),
+            'access_token'      => array('FriendlyName' => 'Access Token', 'Type' => 'text', 'Size' => '100'),
+            'dev_merchant_id'   => array('FriendlyName' => 'Sandbox Merchant ID', 'Type' => 'text', 'Size' => '15', 'Description' => 'Use your GoCardless login details to access the <a href="http://sandbox.gocardless.com/">Sandbox</a> and then find your API keys in the Developer tab'),
+            'dev_app_id'        => array('FriendlyName' => 'Sandbox App ID', 'Type' => 'text', 'Size' => '100'),
+            'dev_app_secret'    => array('FriendlyName' => 'Sandbox App Secret', 'Type' => 'text', 'Size' => '100'),
+            'dev_access_token'  => array('FriendlyName' => 'Sandbox Access Token', 'Type' => 'text', 'Size' => '100'),
+            'oneoffonly'        => array('FriendlyName' => 'One Off Only', 'Type' => 'yesno', 'Description' => 'Tick to only perform one off captures - no recurring pre-auth agreements'),
+            'instantpaid'       => array('FriendlyName' => 'Instant Activation', 'Type' => 'yesno', 'Description' => 'Tick to immediately mark invoices paid after payment is initiated (despite clearing not being confirmed for 3-5 days)', ),
+            'test_mode'         => array('FriendlyName' => 'Test Mode', 'Type' => 'yesno', 'Description' => 'Tick to enable test mode', ),
         );
 
         return $aConfig;
 
     }
-
+    
+    /**
+    * Checks whether test mode is enabled or disabled
+    * and sets appropriate details against GoCardless object
+    * @param array $params Array of parameters that contains gateway details
+    */
+    function gocardless_set_account_details($params=null) {
+        
+        # check if params have been supplied, if not attempt
+        # to use global params
+        if(is_null($params)) {
+            unset($params);
+            global $params;
+        }
+        global $CONFIG;
+        
+        # check if we are running in Sandbox mode (test_mode)
+        if($params['test_mode'] == 'on') {
+            # Initialise SANDBOX Account Details
+            GoCardless::set_account_details(array(
+                'app_id'        => $params['dev_app_id'],
+                'app_secret'    => $params['dev_app_secret'],
+                'merchant_id'   => $params['dev_merchant_id'],
+                'access_token'  => $params['dev_access_token'],
+                'test_mode'     => 'on',
+                'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+                'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
+            ));
+        } else {
+            # Initialise LIVE Account Details
+            GoCardless::set_account_details(array(
+                'app_id'        => $params['app_id'],
+                'app_secret'    => $params['app_secret'],
+                'merchant_id'   => $params['merchant_id'],
+                'access_token'  => $params['access_token'],
+                'test_mode'     => 'off',
+                'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+                'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
+            ));
+        }
+    }
+    
     /**
     ** Builds the payment link for WHMCS users to be redirected to GoCardless
     **/
@@ -43,8 +88,11 @@
 
         # create GoCardless database if it hasn't already been created
         gocardless_createdb();
+        
+        # get gateway params
+        $gateway = getGatewayVariables('gocardless');
 
-        # check for pending payment based on the invoiceID
+        # check the invoice, to see if it has a record with a valid resource ID. If it does, the invoice is pending payment
         $pendingid = get_query_val('mod_gocardless', 'id', array('invoiceid' => $params['invoiceid'], 'resource_id' => array('sqltype' => 'NEQ', 'value' => '')));
 		
 		# check if a result was returned from the mod_gocardless table (if it has there is a pending payment)
@@ -113,16 +161,10 @@
                 }
 
             }
+            
+            # set appropriate GoCardless API details
+            gocardless_set_account_details();
 
-            // Initialise Account Details
-            GoCardless::set_account_details(array(
-                    'app_id'        => $params['app_id'],
-                    'app_secret'    => $params['app_secret'],
-                    'merchant_id'   => $params['merchant_id'],
-                    'access_token'  => $params['access_token'],
-                    'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
-                ));
-			
 			# set user array based on params parsed to $link
             $aUser = array(
                 'first_name'        => $params['clientdetails']['firstname'],
@@ -134,6 +176,8 @@
                 'billing_county'    => $params['clientdetails']['state'],
                 'billing_postcode'  => $params['clientdetails']['postcode'],
             );
+            
+            # currency conversion
 			
 			# if the valuation of $maxamount is false, we are making a one off payment
             if (!$maxamount) {
@@ -150,7 +194,7 @@
 				));
 
                 # return one time payment button code
-                return '<a href="'.$url.'"><input type="button" value="'.$title.'" /></a>';
+                return ($gateway['test_mode'] == 'on' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . '<a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
 
             } else {
                 # we are setting up a recurring payment, display the appropriate code
@@ -169,8 +213,8 @@
 				));
 
                 # return the recurring preauth button code
-                return 'When you get to GoCardless you will see an agreement for the <b>maximum possible amount</b> we\'ll ever need to charge you in a single invoice for this order, with a frequency of the shortest item\'s billing cycle. But rest assured we will never charge you more than the actual amount due.
-                <br /><a href="'.$url.'"><input type="button" value="'.$title.'" /></a>';
+                return ($gateway['test_mode'] == 'on' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . 'When you get to GoCardless you will see an agreement for the <b>maximum possible amount</b> we\'ll ever need to charge you in a single invoice for this order, with a frequency of the shortest item\'s billing cycle. But rest assured we will never charge you more than the actual amount due.
+                <br /><a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
 
             }
         }
@@ -188,13 +232,7 @@
         gocardless_createdb();
 		
 		# Send the relevant API information to the GoCardless class for future processing
-        GoCardless::set_account_details(array(
-                'app_id'        => $params['app_id'],
-                'app_secret'    => $params['app_secret'],
-                'merchant_id'   => $params['merchant_id'],
-                'access_token'  => $params['access_token'],
-                'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
-            ));
+        gocardless_set_account_details();
 
 		# check against the database if the bill relevant to this invoice has already been created
         $existing_payment_query = select_query('mod_gocardless', 'resource_id', array('invoiceid' => $params['invoiceid']));
@@ -238,9 +276,9 @@
 						# check if the bill already exists in the database, if it does we will just update the record
 						# if not, we will create a new record and record the transaction
 						if (!mysql_num_rows($existing_payment_query)) {
-							# Add the bill ID to the table
-							insert_query('mod_gocardless', array('invoiceid' => $params['invoiceid'], 'billcreated' => 1, 'resource_id' => $bill->id));
-							logTransaction('GoCardless', 'Transaction initiated successfully, confirmation will take 2-5 days', 'Pending');
+							# Add the bill ID to the table and mark the transaction as pending
+							insert_query('mod_gocardless', array('invoiceid' => $params['invoiceid'], 'billcreated' => 1, 'resource_id' => $bill->id, 'preauth_id'  => $pre_auth->id));
+							logTransaction('GoCardless', 'Transaction initiated successfully, confirmation will take 2-5 days' . "\nPreAuth: " . $pre_auth->id . "\nBill ID: " . $bill->id, 'Pending');
 						} else {
 							# update the table with the bill ID
 							update_query('mod_gocardless', array('billcreated' => 1, 'resource_id' => $bill->id), array('invoiceid' => $params['invoiceid']));
