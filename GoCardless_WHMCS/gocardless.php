@@ -55,12 +55,12 @@
         # check if we are running in Sandbox mode (test_mode)
         if($params['test_mode'] == 'on') {
             # Initialise SANDBOX Account Details
+            GoCardless::$environment = 'sandbox';
             GoCardless::set_account_details(array(
                 'app_id'        => $params['dev_app_id'],
                 'app_secret'    => $params['dev_app_secret'],
                 'merchant_id'   => $params['dev_merchant_id'],
                 'access_token'  => $params['dev_access_token'],
-                'test_mode'     => 'on',
                 'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
                 'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
             ));
@@ -71,7 +71,6 @@
                 'app_secret'    => $params['app_secret'],
                 'merchant_id'   => $params['merchant_id'],
                 'access_token'  => $params['access_token'],
-                'test_mode'     => 'off',
                 'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
                 'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
             ));
@@ -194,7 +193,7 @@
 				));
 
                 # return one time payment button code
-                return ($gateway['test_mode'] == 'on' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . '<a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
+                return (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . '<a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
 
             } else {
                 # we are setting up a recurring payment, display the appropriate code
@@ -213,7 +212,7 @@
 				));
 
                 # return the recurring preauth button code
-                return ($gateway['test_mode'] == 'on' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . 'When you get to GoCardless you will see an agreement for the <b>maximum possible amount</b> we\'ll ever need to charge you in a single invoice for this order, with a frequency of the shortest item\'s billing cycle. But rest assured we will never charge you more than the actual amount due.
+                return (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . 'When you get to GoCardless you will see an agreement for the <b>maximum possible amount</b> we\'ll ever need to charge you in a single invoice for this order, with a frequency of the shortest item\'s billing cycle. But rest assured we will never charge you more than the actual amount due.
                 <br /><a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
 
             }
@@ -313,17 +312,17 @@
     function gocardless_createdb() {
 
         $query = "CREATE TABLE IF NOT EXISTS `mod_gocardless` (
-        `id` int(11) NOT NULL auto_increment,
-        `invoiceid` int(11) NOT NULL,
-        `billcreated` int(11) default NULL,
-        `resource_id` varchar(16) default NULL,
-        PRIMARY KEY  (`id`))";
+                 `id` int(11) NOT NULL auto_increment,
+                 `invoiceid` int(11) NOT NULL,
+                 `billcreated` int(11) default NULL,
+                 `resource_id` varchar(16) default NULL,
+                 `preauth_id` varchar(16) default NULL,
+                 `payment_failed` tinyint(1) NOT NULL default '0',
+                 PRIMARY KEY  (`id`))";
 
         full_query($query);
 
     }
-	
-    function gocardless_initiatepayment() {}
 	
 	/**
 	** Display payment status message to admin when the preauth
@@ -333,10 +332,22 @@
 
         if ($vars['status']=='Unpaid') {
 
-            $refid = get_query_val("mod_gocardless","id",array("invoiceid"=>$vars['invoiceid']));
-
-            if ($refid) return array('type' => 'info', 'title' => 'GoCardless Payment Pending', 'msg' => 'There is a pending payment already in processing for this invoice. Status will be automatically updated once confirmation is received back from GoCardless.' );
-
+            # get relevant invoice information from the database
+            $d = select_query('mod_gocardless',"id,payment_failed",array('invoiceid' => $vars['invoiceid']));
+            $aResult = mysql_fetch_assoc($d);
+            
+            # check we have been able to obtain the details
+            if($aResult['id']) {
+                if($aResult['payment_failed']) {
+                    # if the payment failed flag is set, notify the admin of this problem
+                    return array('type' => 'error', 'title' => 'GoCardless Payment Failed', 'msg' => 'One or more payments against this invoice have failed. By default, GoCardless will not attempt to make another payment.');
+                } else {
+                    # the record exists in the database, the invoice is unpaid and the payment hasnt failed
+                    # this condition means that the payment must be pending!
+                    return array('type' => 'info', 'title' => 'GoCardless Payment Pending', 'msg' => 'There is a pending payment already in processing for this invoice. Status will be automatically updated once confirmation is received back from GoCardless.' );
+                }
+            }
+            unset($d,$aResult);
         }
 
     }

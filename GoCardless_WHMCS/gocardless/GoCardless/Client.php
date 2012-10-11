@@ -72,13 +72,6 @@ class GoCardless_Client {
       throw new GoCardless_ClientException('No app_secret specfied');
     }
 
-    // If environment is not set then default to production
-    if ( !($this->account_details['test_mode'])=='on') {
-      GoCardless::$environment = 'production';
-    } else {
-      GoCardless::$environment = 'sandbox';
-    }
-
     // Take base_url from array
     if (isset($account_details['base_url'])) {
       $this->base_url = $account_details['base_url'];

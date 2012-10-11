@@ -3,7 +3,7 @@
     /**
     * GoCardless WHMCS module redirect.php
     * This file confirms verifies a preauth and creates a bill underneath it
-    *
+    * Either a one of payment (bill) or a pre authorisation can be handled by this file
     * @author WHMCS <info@whmcs.com>
     * @version 0.1.0
     */
@@ -42,14 +42,14 @@
             ));
         } catch(Exception $e) {
             # failed to verify the resource with GoCardless. Log transaction and ouput error message to client
-            logTransaction($gateway['name'],'GoCardless Redirect Failed (Resource not verified) : ' .print_r($_GET,true) . 'Exception: ' . print_r($e,true),'Unsuccessful');
+            logTransaction($gateway['paymentmethod'],'GoCardless Redirect Failed (Resource not verified) : ' .print_r($_GET,true) . 'Exception: ' . print_r($e,true),'Unsuccessful');
             header('HTTP/1.1 400 Bad Request');
             exit('Your request could not be completed');
         }
         
     } else {
         # failed to get resource ID and resource type, invalid request. Log transaction and ouput error message to client
-        logTransaction($gateway['name'],'GoCardless Redirect Failed (No data provided) : ' .print_r($_GET,true),'Unsuccessful');
+        logTransaction($gateway['paymentmethod'],'GoCardless Redirect Failed (No data provided) : ' .print_r($_GET,true),'Unsuccessful');
         header('HTTP/1.1 400 Bad Request');
         exit('Your request could not be completed');
     }
@@ -61,7 +61,7 @@
     if($invoiceID) {
         
         # check this invoice exists (halt execution if it doesnt)
-        checkCbInvoiceID($invoiceID, $gateway['name']);
+        checkCbInvoiceID($invoiceID, $gateway['paymentmethod']);
 
         # select client record from database
         $d = select_query('tblclients', 'gatewayid', array('id' => $res['userid']));
@@ -76,19 +76,16 @@
         switch ($_GET['resource_type']) {
 
             case "pre_authorization":
-                # the resource is a preauth, we need to create the users first bill
-                # verify the preauth
-                $pre_auth = GoCardless_PreAuthorization::find($_GET['resource_id']);
-                
-                $preauth_id = $_GET['resource_id'];
+                # get the confirmed resource (pre_auth) and created a referenced param $pre_auth
+                $pre_auth &= $confirmed_resource;
                 
                 # create a GoCardless bill and store it in $bill
-                $bill = $pre_auth->create_bill(array('amount' => $invoiceAmount));
+                $oBill = $pre_auth->create_bill(array('amount' => $invoiceAmount));
 
                 # if we have been able to create the bill, the preauth ID being null suggests payment is pending
-                if ($bill->id) {
-                    $billID = $bill->id;
-                    insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $bill->id, 'preauth_id' => $preauth_id));
+                if ($oBill->id) {
+                    $billID = $oBill->id;
+                    insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $oBill->id, 'preauth_id' => $pre_auth->id));
                 }
                 
                 # query tblinvoiceitems to get the related service ID
@@ -96,17 +93,17 @@
 
                 # update subscription ID with the resource ID on all HOSTING type services corresponding with the invoice
                 while ($res = mysql_fetch_assoc($d)) {
-                    update_query('tblhosting', array('subscriptionid' => $preauth_id), array('id' => $res['relid']));
+                    update_query('tblhosting', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
                 }
                 
                 # clean up
-                unset($preauth_id,$pre_auth,$d,$res);
+                unset($pre_auth,$d,$res);
                 break;
 
             case 'bill':
                 # the response is a one time bill, we need to add the bill to the database
-                $billID = $_GET['resource_id'];
-                insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $_GET['resource_id']));
+                $oBill = $confirmed_resource;
+                insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $oBill->id));
                 break;
                 
             default:
@@ -119,16 +116,14 @@
         # check if we should be marking the bill as paid instantly
         if($gateway['instantpaid'] == 'on') {
             # process the payment to instantly mark it as paid
-            $bill = GoCardless_Bill::find($billID);
             $mc_gross = $bill->amount;
             
             # mark the invoice as paid
-            addInvoicePayment($invoiceID, $bill->id, $bill->amount, $bill->gocardless_fees, $gateway['name']);
-            logTransaction($gateway['name'], 'GoCardless Bill ('.$_GET['resource_type'].')Instant Paid: ' . print_r($bill, true), 'Successful');
+            addInvoicePayment($invoiceID, $oBill->id, $oBill->amount, $oBill->gocardless_fees, $gateway['paymentmethod']);
+            logTransaction($gateway['paymentmethod'], 'GoCardless Bill ('.$oBill->id.')Instant Paid: ' . print_r($oBill, true), 'Successful');
         } else {
             # log payment pending
-            $bill = GoCardless_Bill::find($billID);
-            logTransaction($gateway['name'],'GoCardless Bill ('.$_GET['resource_type'].')Pending','Pending');
+            logTransaction($gateway['paymentmethod'],'GoCardless Bill ('.$oBill->id.') Pending','Pending');
         }
 
         # if we get to this point, we have verified everything we need to, redirect to invoice
@@ -142,5 +137,3 @@
         header('HTTP/1.1 400 Bad Request');
         exit('Your request could not be completed');
     }
-    
-    exit('EOF');
