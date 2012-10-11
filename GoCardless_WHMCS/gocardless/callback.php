@@ -51,8 +51,9 @@
                 case 'expired':
                     # delete related preauths
                     foreach ($val['pre_authorizations'] as $aPreauth) {
-                        # find preauth in tblhosting and empty out the subscriptionid field
+                        # find preauth in tblhosting & tbldomains and empty out the subscriptionid field
                         update_query('tblhosting',array('subscriptionid' => NULL),array('subscriptionid'    => $aPreauth->id));
+                        update_query('tbldomains',array('subscriptionid' => NULL),array('subscriptionid'    => $aPreauth->id));
                         # log each preauth that has been cancelled
                         logTransaction($gateway['paymentmethod'],'GoCardless Preauthorisation Cancelled: ' . print_r($aPreauth,true),'Cancelled');
                     }
@@ -102,12 +103,16 @@
                     }
                     break;
                 case 'failed':
+                case 'refunded':
                     # log each bill as being failed
                     foreach($val['bills'] as $aBill) {
                         # check if the bill corresponds to an invoice
                         $d = select_query('mod_gocardless','invoiceid',array('resource_id'   => $aBill['id']));
-                        # update mod_gocardless to suggest a failed payment
-                        update_query('mod_gocardless',array('payment_failed' => 1),array('resource_id' => $aBill['id'], 'payment_failed' => '0'));
+                        
+                        if($val['action'] == 'failed') {
+                            # update mod_gocardless to suggest a failed payment
+                            update_query('mod_gocardless',array('payment_failed' => 1),array('resource_id' => $aBill['id'], 'payment_failed' => 0));
+                        }
                         while($res = mysql_fetch_assoc($d)) { # $res stored invoiceid
                             
                             # load the corresponding invoice
@@ -118,7 +123,7 @@
                                 if($res2['status'] == 'Paid') {
                                     # the invoice is marked as paid already (mark as paid instantly)
                                     # update the corresponding transaction to mark as FAIL and mark the invoice as unpaid
-                                    update_query('tblaccounts', array('amountin' => "0", 'fees' => "0", 'transid' => "FAIL_{$aBill['id']}"),array('invoiceid' => $res['invoiceid'], 'transid' => $aBill['id']));
+                                    update_query('tblaccounts', array('amountin' => "0", 'fees' => "0", 'transid' => ($val['action'] == 'failed' ? 'FAIL_' : 'REFUND_' . $aBill['id']),array('invoiceid' => $res['invoiceid'], 'transid' => $aBill['id']));
                                     update_query('tblinvoices', array('status' => 'Unpaid'), array('id' => $res['invoiceid']));
                                 }
                             }
@@ -126,9 +131,6 @@
                         # log the failed transaction in the gateway log
                         logTransaction($gateway['paymentmethod'],"GoCardless Payment Failed.\r\nPreauth ID: {$aBill['source_id']}\nBill ID: {$aBill['id']}: " . print_r($aBill,true),'Failed');
                     }
-                    break;
-                case 'refunded':
-                    # do nothing on refunded status
                     break;
                 case 'created':
                     # we dont want to handle created bills

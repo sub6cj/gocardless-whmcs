@@ -91,9 +91,18 @@
                 # query tblinvoiceitems to get the related service ID
                 $d = select_query('tblinvoiceitems', 'relid', array('type' => 'Hosting', 'invoiceid' => $invoiceID));
 
-                # update subscription ID with the resource ID on all HOSTING type services corresponding with the invoice
+                # update subscription ID with the resource ID on all hosting and domain type services corresponding with the invoice
                 while ($res = mysql_fetch_assoc($d)) {
-                    update_query('tblhosting', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
+                    switch($res['type']) {
+                        case 'Hosting':
+                            update_query('tblhosting', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
+                            break;
+                        case 'DomainRegister':
+                        case 'DomainRenew':
+                            update_query('tbldomains', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
+                            break;
+                    }
+                    
                 }
                 
                 # clean up

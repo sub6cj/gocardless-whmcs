@@ -10,6 +10,10 @@
     require_once ROOTDIR . '/modules/gateways/gocardless/GoCardless.php';
 
     define('GC_VERSION', '0.1.0');
+    
+    function po($val,$kill=true) {
+        echo '<pre>'.print_r($val,true);$kill ? exit : null;
+    }
 
     /**
     ** GoCardless configuration for WHMCS
@@ -52,6 +56,11 @@
         }
         global $CONFIG;
         
+        # check we have been able to obtain the correct params
+        if(!isset($params['app_id'])) {
+            throw new Exception('Could not get GoCardless params');
+        }
+        
         # check if we are running in Sandbox mode (test_mode)
         if($params['test_mode'] == 'on') {
             # Initialise SANDBOX Account Details
@@ -88,9 +97,6 @@
         # create GoCardless database if it hasn't already been created
         gocardless_createdb();
         
-        # get gateway params
-        $gateway = getGatewayVariables('gocardless');
-
         # check the invoice, to see if it has a record with a valid resource ID. If it does, the invoice is pending payment
         $pendingid = get_query_val('mod_gocardless', 'id', array('invoiceid' => $params['invoiceid'], 'resource_id' => array('sqltype' => 'NEQ', 'value' => '')));
 		
@@ -99,70 +105,93 @@
             # Pending Payment Found - Prevent Duplicate Payment with a Msg
             return '<strong>Your payment is currently pending and will be processed within 3-5 days.</strong>';
         } else {
-		
-			# create payment form to submit params to GoCardless
-            
+            # we need to create a payment form to submit to GoCardless, to do this we should work out the maximum possible amount to charge
 			# get tax rates
             $data = get_query_vals("tblinvoices", "taxrate,taxrate2", array('id' => $params['invoiceid']));
-            $taxrate = $data["taxrate"];
-            $taxrate2 = $data["taxrate2"];
+            list($taxrate,$taxrate2) = array($data["taxrate"],$data['taxrate2']);
+            unset($data);
 			
 			# if $taxrate is 0 and the tax is all inclusive, then set appropriate tax rate
 			if(!$taxrate && $CONFIG['TaxType'] == 'Inclusive') {
+                # tax is inclusive
 				$taxrate = 1;
 			} else {
+                # 1.x of the original value
 				$taxrate = ($taxrate /100) + 1;
 			}
 
-			# set params $maxamount, $recurfrequency to 0
-            $maxamount = $recurfrequency = 0;
+			# set params $maxamount & $recurfrequency to 0
+            $maxamount = $setupfee = $recurfrequency = 0;
 
-            # check if the configuration is set to make one of payments only
+            # check if the plugin configuration is set to make one of payments only
             if (!$params['oneoffonly']) {
-			
-				# we could be handling a recurring payment
-
-                # calculate max amount to be given to PreAuth
-                $query = mysql_query("SELECT tblproducts.id, tblproducts.name FROM tblinvoiceitems INNER JOIN tblhosting ON tblinvoiceitems.relid = tblhosting.id INNER JOIN tblproducts ON tblhosting.packageid = tblproducts.id WHERE tblinvoiceitems.invoiceid = ".$params['invoiceid']." GROUP BY tblproducts.id");
-                if (mysql_num_rows($query) == 1) {
-                    $data = mysql_fetch_array($query);
-                    $description = $data['name'];
-                }
-
-                $result = select_query("tblinvoiceitems", "type,relid,amount,taxed", array('invoiceid' => $params['invoiceid']));
-                while ($data = mysql_fetch_array($result)) {
-
-                    $itemtype   = $data['type'];
-                    $itemrelid  = $data['relid'];
-                    $itemamount = $data['amount'];
-                    $itemtaxed  = $data['taxed'];
-
-                    $itemtaxed = ($itemtaxed) ? $taxrate : 1;
-
-                    $itemrecurvals = array();
-                    if ($itemtype == 'Hosting') $itemrecurvals = get_query_vals("tblhosting", "firstpaymentamount,amount,billingcycle", array('id' => $itemrelid));
-                    if ($itemtype == 'Addon') $itemrecurvals = get_query_vals("tblhostingaddons", "(setupfee+recurring),recurring,billingcycle", array('id' => $itemrelid));
-                    if ($itemtype == 'DomainRegister' || $itemtype == 'DomainRegister') $itemrecurvals = get_query_vals("tbldomains", "firstpaymentamount,recurringamount", array('id' => $itemrelid));
-
-                    if (count($itemrecurvals) && $itemrecurvals[2] != 'One Time' && $itemrecurvals[2] != 'Free Account' && $itemrecurvals[2] != 'Free') {
-
-                        // Add to Recurring Amount
-                        $maxamount += ($itemrecurvals[0] > $itemrecurvals[1]) ? $itemrecurvals[0] * $itemtaxed : $itemrecurvals[1] * $itemtaxed;
-
-                        // Also track recurring months
-                        $recurmonths = getBillingCycleMonths($itemrecurvals[2]);
-                        if ( ! $recurfrequency || $recurmonths < $recurfrequency) {
-                            $recurfrequency = $recurmonths;
-                        }
-
+                
+                $d = select_query('tblinvoiceitems','relid,type,amount,taxed',array('invoiceid' => $params['invoiceid']));
+                
+                # loop through each invoice item on the table
+                while($data = mysql_fetch_assoc($d)) {
+                    
+                    # check if the item is taxable
+                    $itemtaxed = ($data['taxed'] ? $taxrate : 1);
+                    
+                    $aItemRecurVals = array();
+                    switch($data['type']) {
+                        
+                        case 'Hosting':
+                        
+                            # Handle hosting service, pull relevant info from database
+                            $aItemRecurVals = get_query_vals("tblhosting", "firstpaymentamount,amount,billingcycle", array('id' => $data['relid']));
+                            # if the firstpaymentamount is greater than the amount, we need to include a setup fee
+                            if($aItemRecurVals['firstpaymentamount'] > $aItemRecurVals['amount']) {
+                                $setupfee+= $aItemRecurVals['firstpaymentamount'];
+                            }
+                            # add to monthly max amount
+                            $maxamount+= $aItemRecurVals['amount'];
+                            # check if we have the lowest possible recur frequency
+                            if(($recurfrequency > getBillingCycleMonths($aItemRecurVals['billingcycle'])) or ($recurfrequency == 0)) {
+                                $recurfrequency = getBillingCycleMonths($aItemRecurVals['billingcycle']);
+                            }
+                            
+                            break;
+                        case 'Addon':
+                        
+                            # Handle product addon
+                            $aItemRecurVals = get_query_vals("tblhostingaddons", "setupfee,recurring,billingcycle", array('id' => $data['relid']));
+                            # append the setup fee and max amount to the existing values
+                            $setupfee+= $aItemRecurVals['setupfee'];
+                            $maxamount+= $aItemRecurVals['recurring'];
+                            # check if we have the lowest possible recur frequency
+                            if($recurfrequency > getBillingCycleMonths($aItemRecurVals['billingcycle'])  or ($recurfrequency == 0)) {
+                                $recurfrequency = getBillingCycleMonths($aItemRecurVals['billingcycle']);
+                            }
+                            
+                            break;
+                        case 'DomainRegister':
+                        case 'DomainRenew':
+                        case 'DomainTransfer':
+                        
+                            # Handle domain names
+                            $aItemRecurVals = get_query_vals("tbldomains", "firstpaymentamount,recurringamount", array('id' => $data['relid']));
+                            
+                            # if the firstpayment amount is greater than the recurring amount, we need to include a setup fee
+                            if($aItemRecurVals['firstpaymentamount'] > $aItemRecurVals['recurringamount']) {
+                                $setupfee+= $aItemRecurVals['firstpaymentamount'];
+                            }
+                            $maxamount+= $aItemRecurVals['recurringamount'];
+                            
+                            break;
+                        default:
+                            # Handle items that have no type (setup fee, no recurrance)
+                            break;
                     }
-
+                    
                 }
+                unset($res,$d);
 
             }
             
             # set appropriate GoCardless API details
-            gocardless_set_account_details();
+            gocardless_set_account_details($params);
 
 			# set user array based on params parsed to $link
             $aUser = array(
@@ -204,6 +233,7 @@
 				# create GoCardless preauth URL using the GoCardless library
                 $url = GoCardless::new_pre_authorization_url(array(
 					'max_amount'      => $maxamount,
+                    'setup_fee'       => $setupfee,
 					'name'            => $description,
 					'interval_length' => $recurfrequency,
 					'interval_unit'   => 'month',
@@ -231,7 +261,7 @@
         gocardless_createdb();
 		
 		# Send the relevant API information to the GoCardless class for future processing
-        gocardless_set_account_details();
+        gocardless_set_account_details($params);
 
 		# check against the database if the bill relevant to this invoice has already been created
         $existing_payment_query = select_query('mod_gocardless', 'resource_id', array('invoiceid' => $params['invoiceid']));
