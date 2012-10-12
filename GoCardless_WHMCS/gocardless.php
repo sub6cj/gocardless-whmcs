@@ -21,20 +21,75 @@
     ** used within the admin interface. These params are then stored in `tblpaymentgateways`
     **/
     function gocardless_config() {
+        
+        global $CONFIG;
 
         $aConfig = array(
-            'FriendlyName'      => array('Type' => 'System', 'Value' => 'GoCardless'),
-            'merchant_id'       => array('FriendlyName' => 'Merchant ID', 'Type' => 'text', 'Size' => '15', 'Description' => '<a href="http://gocardless.com/merchants/new">Sign up</a> for a GoCardless account then find your API keys in the Developer tab'),
-            'app_id'            => array('FriendlyName' => 'App ID', 'Type' => 'text', 'Size' => '100'),
-            'app_secret'        => array('FriendlyName' => 'App Secret', 'Type' => 'text', 'Size' => '100'),
-            'access_token'      => array('FriendlyName' => 'Access Token', 'Type' => 'text', 'Size' => '100'),
-            'dev_merchant_id'   => array('FriendlyName' => 'Sandbox Merchant ID', 'Type' => 'text', 'Size' => '15', 'Description' => 'Use your GoCardless login details to access the <a href="http://sandbox.gocardless.com/">Sandbox</a> and then find your API keys in the Developer tab'),
-            'dev_app_id'        => array('FriendlyName' => 'Sandbox App ID', 'Type' => 'text', 'Size' => '100'),
-            'dev_app_secret'    => array('FriendlyName' => 'Sandbox App Secret', 'Type' => 'text', 'Size' => '100'),
-            'dev_access_token'  => array('FriendlyName' => 'Sandbox Access Token', 'Type' => 'text', 'Size' => '100'),
-            'oneoffonly'        => array('FriendlyName' => 'One Off Only', 'Type' => 'yesno', 'Description' => 'Tick to only perform one off captures - no recurring pre-auth agreements'),
-            'instantpaid'       => array('FriendlyName' => 'Instant Activation', 'Type' => 'yesno', 'Description' => 'Tick to immediately mark invoices paid after payment is initiated (despite clearing not being confirmed for 3-5 days)', ),
-            'test_mode'         => array('FriendlyName' => 'Test Mode', 'Type' => 'yesno', 'Description' => 'Tick to enable test mode', ),
+            'FriendlyName' => array(
+                'Type' => 'System',
+                'Value' => 'GoCardless'
+            ),
+            'UsageNotes' => array(
+                'Type' => 'System',
+                'Value' => "You must set your <strong>Webhook URI</strong> within the 'Developer' > 'App Settings' tab to <strong>{$CONFIG['SystemURL']}/modules/gateways/gocardless/callback.php</strong>"
+            ),
+            'merchant_id' => array(
+                'FriendlyName' => 'Merchant ID',
+                'Type' => 'text',
+                'Size' => '15',
+                'Description' => '<a href="http://gocardless.com/merchants/new" target="_blank">Sign up</a> for a GoCardless account then find your API keys in the Developer tab'
+            ),
+            'app_id' => array(
+                'FriendlyName' => 'App ID',
+                'Type' => 'text',
+                'Size' => '100'
+            ),
+            'app_secret' => array(
+                'FriendlyName' => 'App Secret',
+                'Type' => 'text',
+                'Size' => '100'
+            ),
+            'access_token' => array(
+                'FriendlyName' => 'Access Token',
+                'Type' => 'text',
+                'Size' => '100'
+            ),
+            'dev_merchant_id' => array(
+                'FriendlyName' => 'Sandbox Merchant ID', 
+                'Type' => 'text',
+                'Size' => '15',
+                'Description' => 'Use your GoCardless login details to access the <a href="http://sandbox.gocardless.com/" target="_blank">Sandbox</a> and then find your API keys in the Developer tab'
+            ),
+            'dev_app_id' => array(
+                'FriendlyName' => 'Sandbox App ID',
+                'Type' => 'text',
+                'Size' => '100'
+            ),
+            'dev_app_secret' => array(
+                'FriendlyName' => 'Sandbox App Secret',
+                'Type' => 'text',
+                'Size' => '100'
+            ),
+            'dev_access_token' => array(
+                'FriendlyName' => 'Sandbox Access Token',
+                'Type' => 'text',
+                'Size' => '100'
+            ),
+            'oneoffonly' => array(
+                'FriendlyName' => 'One Off Only',
+                'Type' => 'yesno',
+                'Description' => 'Tick to only perform one off captures - no recurring pre-auth agreements'
+            ),
+            'instantpaid' => array(
+                'FriendlyName' => 'Instant Activation',
+                'Type' => 'yesno',
+                'Description' => 'Tick to immediately mark invoices paid after payment is initiated (despite clearing not being confirmed for 3-5 days)'
+            ),
+            'test_mode' => array(
+                'FriendlyName' => 'Test Mode',
+                'Type' => 'yesno',
+                'Description' => 'Tick to enable test mode'
+            )
         );
 
         return $aConfig;
@@ -97,156 +152,96 @@
         # create GoCardless database if it hasn't already been created
         gocardless_createdb();
         
-        # check the invoice, to see if it has a record with a valid resource ID. If it does, the invoice is pending payment
-        $pendingid = get_query_val('mod_gocardless', 'id', array('invoiceid' => $params['invoiceid'], 'resource_id' => array('sqltype' => 'NEQ', 'value' => '')));
-		
-		# check if a result was returned from the mod_gocardless table (if it has there is a pending payment)
-        if ($pendingid) {
+        # check the invoice, to see if it has a record with a valid resource ID. If it does, the invoice is pending payment.
+        # we will return a message on the invoice to prevent duplicate payment attempts
+        if (get_query_val('mod_gocardless', 'id', array('invoiceid' => $params['invoiceid'], 'resource_id' => array('sqltype' => 'NEQ', 'value' => '')))) {
             # Pending Payment Found - Prevent Duplicate Payment with a Msg
             return '<strong>Your payment is currently pending and will be processed within 3-5 days.</strong>';
-        } else {
-            # we need to create a payment form to submit to GoCardless, to do this we should work out the maximum possible amount to charge
-			# get tax rates
-            $data = get_query_vals("tblinvoices", "taxrate,taxrate2", array('id' => $params['invoiceid']));
-            list($taxrate,$taxrate2) = array($data["taxrate"],$data['taxrate2']);
-            unset($data);
-			
-			# if $taxrate is 0 and the tax is all inclusive, then set appropriate tax rate
-			if(!$taxrate && $CONFIG['TaxType'] == 'Inclusive') {
-                # tax is inclusive
-				$taxrate = 1;
-			} else {
-                # 1.x of the original value
-				$taxrate = ($taxrate /100) + 1;
-			}
-
-			# set params $maxamount & $recurfrequency to 0
-            $maxamount = $setupfee = $recurfrequency = 0;
-
-            # check if the plugin configuration is set to make one of payments only
-            if (!$params['oneoffonly']) {
-                
-                $d = select_query('tblinvoiceitems','relid,type,amount,taxed',array('invoiceid' => $params['invoiceid']));
-                
-                # loop through each invoice item on the table
-                while($data = mysql_fetch_assoc($d)) {
-                    
-                    # check if the item is taxable
-                    $itemtaxed = ($data['taxed'] ? $taxrate : 1);
-                    
-                    $aItemRecurVals = array();
-                    switch($data['type']) {
-                        
-                        case 'Hosting':
-                        
-                            # Handle hosting service, pull relevant info from database
-                            $aItemRecurVals = get_query_vals("tblhosting", "firstpaymentamount,amount,billingcycle", array('id' => $data['relid']));
-                            # if the firstpaymentamount is greater than the amount, we need to include a setup fee
-                            if($aItemRecurVals['firstpaymentamount'] > $aItemRecurVals['amount']) {
-                                $setupfee+= $aItemRecurVals['firstpaymentamount'];
-                            }
-                            # add to monthly max amount
-                            $maxamount+= $aItemRecurVals['amount'];
-                            # check if we have the lowest possible recur frequency
-                            if(($recurfrequency > getBillingCycleMonths($aItemRecurVals['billingcycle'])) or ($recurfrequency == 0)) {
-                                $recurfrequency = getBillingCycleMonths($aItemRecurVals['billingcycle']);
-                            }
-                            
-                            break;
-                        case 'Addon':
-                        
-                            # Handle product addon
-                            $aItemRecurVals = get_query_vals("tblhostingaddons", "setupfee,recurring,billingcycle", array('id' => $data['relid']));
-                            # append the setup fee and max amount to the existing values
-                            $setupfee+= $aItemRecurVals['setupfee'];
-                            $maxamount+= $aItemRecurVals['recurring'];
-                            # check if we have the lowest possible recur frequency
-                            if($recurfrequency > getBillingCycleMonths($aItemRecurVals['billingcycle'])  or ($recurfrequency == 0)) {
-                                $recurfrequency = getBillingCycleMonths($aItemRecurVals['billingcycle']);
-                            }
-                            
-                            break;
-                        case 'DomainRegister':
-                        case 'DomainRenew':
-                        case 'DomainTransfer':
-                        
-                            # Handle domain names
-                            $aItemRecurVals = get_query_vals("tbldomains", "firstpaymentamount,recurringamount", array('id' => $data['relid']));
-                            
-                            # if the firstpayment amount is greater than the recurring amount, we need to include a setup fee
-                            if($aItemRecurVals['firstpaymentamount'] > $aItemRecurVals['recurringamount']) {
-                                $setupfee+= $aItemRecurVals['firstpaymentamount'];
-                            }
-                            $maxamount+= $aItemRecurVals['recurringamount'];
-                            
-                            break;
-                        default:
-                            # Handle items that have no type (setup fee, no recurrance)
-                            break;
-                    }
-                    
-                }
-                unset($res,$d);
-
-            }
-            
-            # set appropriate GoCardless API details
-            gocardless_set_account_details($params);
-
-			# set user array based on params parsed to $link
-            $aUser = array(
-                'first_name'        => $params['clientdetails']['firstname'],
-                'last_name'         => $params['clientdetails']['lastname'],
-                'email'             => $params['clientdetails']['email'],
-                'billing_address1'  => $params['clientdetails']['address1'],
-                'billing_address2'  => $params['clientdetails']['address2'],
-                'billing_town'      => $params['clientdetails']['city'],
-                'billing_county'    => $params['clientdetails']['state'],
-                'billing_postcode'  => $params['clientdetails']['postcode'],
-            );
-            
-            # currency conversion
-			
-			# if the valuation of $maxamount is false, we are making a one off payment
-            if (!$maxamount) {
-				# we are making a one off payment, display the appropriate code
-				# Button title
-                $title = 'Pay Now with GoCardless';
-				
-				# create GoCardless one off payment URL using the GoCardless library
-                $url = GoCardless::new_bill_url(array(
-					'amount'  => $params['amount'],
-					'name'    => $params['description'],
-					'user'    => $aUser,
-					'state'   => $params['invoiceid'] . ':' . $params['amount']
-				));
-
-                # return one time payment button code
-                return (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . '<a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
-
-            } else {
-                # we are setting up a recurring payment, display the appropriate code
-				
-				# Button title
-                $title = 'Create Subscription with GoCardless';
-				
-				# create GoCardless preauth URL using the GoCardless library
-                $url = GoCardless::new_pre_authorization_url(array(
-					'max_amount'      => $maxamount,
-                    'setup_fee'       => $setupfee,
-					'name'            => $description,
-					'interval_length' => $recurfrequency,
-					'interval_unit'   => 'month',
-					'user'            => $aUser,
-					'state'           => $params['invoiceid'] . ':' . $params['amount']
-				));
-
-                # return the recurring preauth button code
-                return (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . 'When you get to GoCardless you will see an agreement for the <b>maximum possible amount</b> we\'ll ever need to charge you in a single invoice for this order, with a frequency of the shortest item\'s billing cycle. But rest assured we will never charge you more than the actual amount due.
-                <br /><a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
-
-            }
+        
         }
+        
+        # get relevant invoice data
+        $aRecurrings = getRecurringBillingValues($params['invoiceid']);
+        $firstcylceunits = strtoupper(substr($aRecurrings['firstcycleunits'],0,1));
+        
+        # check a number of conditions to see if it is possible to setup a preauth
+        if(($params['oneoffonly'] == 'on') ||
+           ($aRecurrings === false) || 
+           ($aRecurrings['recurringamount'] <= 0) || 
+           # if the first cycle period is greater than 90 days, 24 months or
+           # 5 years we dont want to create a subscription!
+           ((90 < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'D')) ||
+           ((24 < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'M')) ||
+           ((5  < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'Y'))) {
+            $noPreauth = true;
+        } else {
+            $noPreauth = false;
+        }
+        
+        # set appropriate GoCardless API details
+        gocardless_set_account_details($params);
+
+		# set user array based on params parsed to $link
+        $aUser = array(
+            'first_name'        => $params['clientdetails']['firstname'],
+            'last_name'         => $params['clientdetails']['lastname'],
+            'email'             => $params['clientdetails']['email'],
+            'billing_address1'  => $params['clientdetails']['address1'],
+            'billing_address2'  => $params['clientdetails']['address2'],
+            'billing_town'      => $params['clientdetails']['city'],
+            'billing_county'    => $params['clientdetails']['state'],
+            'billing_postcode'  => $params['clientdetails']['postcode'],
+        );
+        
+		# if one of the $noPreauth conditions have been met, display a one time payment button
+        if ($noPreauth) {
+			# we are making a one off payment, display the appropriate code
+			# Button title
+            $title = 'Pay Now with GoCardless';
+			
+			# create GoCardless one off payment URL using the GoCardless library
+            $url = GoCardless::new_bill_url(array(
+				'amount'  => $params['amount'],
+				'name'    => $params['description'],
+				'user'    => $aUser,
+				'state'   => $params['invoiceid'] . ':' . $params['amount']
+			));
+
+            # return one time payment button code
+            $sButton = (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . '<a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
+
+        } else {
+            # we are setting up a preauth (description friendly name), display the appropriate code
+            
+            # get the invoice from the database because we need the invoice creation date
+            $aInvoice = mysql_fetch_assoc(select_query('tblinvoices','date',array('id' => $params['invoiceid'])));
+			
+			# Button title
+            $title = 'Create Subscription with GoCardless';
+			
+			# create GoCardless preauth URL using the GoCardless library
+            $url = GoCardless::new_pre_authorization_url(array(
+				'max_amount'      => $aRecurrings['recurringamount'],
+                # set the setup fee as the first payment amount - recurring amount
+                'setup_fee'       => ($aRecurrings['firstpaymentamount']-$aRecurrings['recurringamount']),
+				'name'            => $params['description'],
+				'interval_length' => $aRecurrings['recurringcycleperiod'],
+                # convert $aRecurrings['recurringcycleunits'] to valid value e.g. day,month,year
+				'interval_unit'   => strtolower(substr($aRecurrings['recurringcycleunits'],0,-1)),
+                # set the start date to the creation date of the invoice - 2 days
+                'start_at'        => date_format(strtotime(' -2 days',strtotime($aInvoice['date'])),'Y-m-d'),
+				'user'            => $aUser,
+				'state'           => $params['invoiceid'] . ':' . $params['amount']
+			));
+            
+            # return the recurring preauth button code
+            $sButton =  (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . 'When you get to GoCardless you will see an agreement for the <b>maximum possible amount</b> we\'ll ever need to charge you in a single invoice for this order, with a frequency of the shortest item\'s billing cycle. But rest assured we will never charge you more than the actual amount due.
+            <br /><a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
+
+        }
+        
+        # return the formatted button
+        return $sButton;
     }
 
 	/**
@@ -298,7 +293,15 @@
 				if($pre_auth) {
 					
 					# Create a bill with the $pre_auth object
-					$bill = $pre_auth->create_bill(array('amount' => $params['amount']));
+                    try {
+					    $bill = $pre_auth->create_bill(array('amount' => $params['amount']));
+                    } catch (Exception $e) {
+                        # we failed to create a new bill, lets update mod_gocardless to alert the admin why payment hasnt been received,
+                        # log this in the transaction log and exit out
+                        update_query('mod_gocardless', array('payment_failed' => 1),array('invoiceid' => $params['invoiceid']));
+                        logTransaction($params['paymentmethod'],"Failed to create GoCardless bill: " . print_r($e,true) . print_r($bill,true),'Failed');
+                        exit;
+                    }
 					
 					# check that the bill has been created
 					if ($bill->id) {
@@ -348,7 +351,9 @@
                  `resource_id` varchar(16) default NULL,
                  `preauth_id` varchar(16) default NULL,
                  `payment_failed` tinyint(1) NOT NULL default '0',
-                 PRIMARY KEY  (`id`))";
+                 PRIMARY KEY  (`id`),
+                 UNIQUE KEY `invoiceid` (`invoiceid`),
+                 UNIQUE KEY `resource_id` (`resource_id`))";
 
         full_query($query);
 
