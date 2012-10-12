@@ -77,10 +77,16 @@
 
             case "pre_authorization":
                 # get the confirmed resource (pre_auth) and created a referenced param $pre_auth
-                $pre_auth &= $confirmed_resource;
+                $pre_auth = &$confirmed_resource;
                 
                 # create a GoCardless bill and store it in $bill
-                $oBill = $pre_auth->create_bill(array('amount' => $invoiceAmount));
+                try {
+                    $oBill = $pre_auth->create_bill(array('amount' => $invoiceAmount));
+                } catch (Exception $e) {
+                    # log that we havent been able to create the bill and exit out
+                    logTransaction($gateway['paymentmethod'],'Failed to create new bill: ' . print_r($e,true),'GoCardless Error');
+                    exit;
+                }
 
                 # if we have been able to create the bill, the preauth ID being null suggests payment is pending
                 if ($oBill->id) {
@@ -91,18 +97,11 @@
                 # query tblinvoiceitems to get the related service ID
                 $d = select_query('tblinvoiceitems', 'relid', array('type' => 'Hosting', 'invoiceid' => $invoiceID));
 
-                # update subscription ID with the resource ID on all hosting and domain type services corresponding with the invoice
+                # update subscription ID with the resource ID on all hosting services corresponding with the invoice
                 while ($res = mysql_fetch_assoc($d)) {
-                    switch($res['type']) {
-                        case 'Hosting':
-                            update_query('tblhosting', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
-                            break;
-                        case 'DomainRegister':
-                        case 'DomainRenew':
-                            update_query('tbldomains', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
-                            break;
+                    if($res['type'] == 'Hosting') {
+                        update_query('tblhosting', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
                     }
-                    
                 }
                 
                 # clean up
