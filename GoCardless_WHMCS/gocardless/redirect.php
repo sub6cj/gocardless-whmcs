@@ -15,7 +15,6 @@
     require_once $whmcsdir . '/includes/gatewayfunctions.php';
     require_once $whmcsdir . '/includes/invoicefunctions.php';
     require_once $whmcsdir . '/modules/gateways/gocardless.php';
-    error_reporting(E_ALL ^ E_NOTICE);
 
     # get gateway params
     $gateway = getGatewayVariables('gocardless');
@@ -62,22 +61,33 @@
         
         # check this invoice exists (halt execution if it doesnt)
         checkCbInvoiceID($invoiceID, $gateway['paymentmethod']);
+        
+        # get user ID and gateway ID for use further down the script
+        $userID = mysql_result(select_query('tblinvoices','userid',array('id' => $invoiceID)),0,0);
+        $gatewayID = mysql_result(select_query('tblclients', 'gatewayid', array('id' => $userID)),0,0);
 
-        # select client record from database
-        $d = select_query('tblclients', 'gatewayid', array('id' => $res['userid']));
-        $res = mysql_fetch_assoc($d);
-
-        # if their gatewayid is blank, set it to gocardless
-        if (empty($res2['gatewayid'])) {
-            update_query('tblclients', array('gatewayid' => 'gocardless'), array('id' => $res['userid']));
+        # if the user records gateway is blank, set it to gocardless
+        if (empty($gatewayID)) {
+            update_query('tblclients', array('gatewayid' => $gateway['paymentmethod']), array('id' => $userID));
         }
 
         # check if we are handling a preauth or a one time bill
         switch ($_GET['resource_type']) {
 
             case "pre_authorization":
+            
                 # get the confirmed resource (pre_auth) and created a referenced param $pre_auth
                 $pre_auth = &$confirmed_resource;
+                
+                # check if we have a setup_fee
+                $setup_id = null;
+                if($pre_auth->setup_fee > 0) {
+                    # store the bill in $oSetupBill for later user
+                    $aoSetupBills = $pre_auth->bills();
+                    $oSetupBill = $aoSetupBills[0];
+                    $setup_id = $oSetupBill->id;
+                    unset($aoSetupBills);
+                }
                 
                 # create a GoCardless bill and store it in $bill
                 try {
@@ -85,19 +95,18 @@
                 } catch (Exception $e) {
                     # log that we havent been able to create the bill and exit out
                     logTransaction($gateway['paymentmethod'],'Failed to create new bill: ' . print_r($e,true),'GoCardless Error');
-                    exit;
+                    exit('Your request could not be completed');
                 }
 
                 # if we have been able to create the bill, the preauth ID being null suggests payment is pending
+                # (this will display in the admin)
                 if ($oBill->id) {
-                    $billID = $oBill->id;
-                    insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $oBill->id, 'preauth_id' => $pre_auth->id));
+                    insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $oBill->id, 'setup_id' => $setup_id, 'preauth_id' => $pre_auth->id));
                 }
                 
                 # query tblinvoiceitems to get the related service ID
-                $d = select_query('tblinvoiceitems', 'relid', array('type' => 'Hosting', 'invoiceid' => $invoiceID));
-
                 # update subscription ID with the resource ID on all hosting services corresponding with the invoice
+                $d = select_query('tblinvoiceitems', 'relid', array('type' => 'Hosting', 'invoiceid' => $invoiceID));
                 while ($res = mysql_fetch_assoc($d)) {
                     if($res['type'] == 'Hosting') {
                         update_query('tblhosting', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
@@ -105,7 +114,7 @@
                 }
                 
                 # clean up
-                unset($pre_auth,$d,$res);
+                unset($d,$res);
                 break;
 
             case 'bill':
@@ -123,14 +132,32 @@
         
         # check if we should be marking the bill as paid instantly
         if($gateway['instantpaid'] == 'on') {
-            # process the payment to instantly mark it as paid
-            $mc_gross = $bill->amount;
             
-            # mark the invoice as paid
+            # convert currency where necessary (GoCardless only handles GBP)
+            if(($currency = getCurrency($res['userid']) != 'GBP') && ($gateway['currency'] == 'GBP')) {
+                # the users currency is not in GBP, convert to the users currency
+                $oBill->amount = convertCurrency($oBill->amount,'GBP',$currency);
+                $oBill->gocardless_fee = convertCurrency($oBill->gocardless_fee,'GBP',$currency);
+                
+                # currency conversion on the setup fee bill
+                if(isset($oSetupBill)) {
+                    $oSetupBill->amount = convertCurrency($oBill->amount,'GBP',$currency);
+                    $oSetupBill->gocardless_fee = convertCurrency($oBill->gocardless_fee,'GBP',$currency);
+                }
+            }
+            
+            # check if we are handling a preauth setup fee
+            # if we are then we need to add it to the total bill
+            if(isset($oSetupBill)) {
+                addInvoicePayment($invoiceID, $oSetupBill->id, $oSetupBill->amount, $oSetupBill->gocardless_fees, $gateway['paymentmethod']);
+            }
+            
+            # add the payment to the invoice
             addInvoicePayment($invoiceID, $oBill->id, $oBill->amount, $oBill->gocardless_fees, $gateway['paymentmethod']);
             logTransaction($gateway['paymentmethod'], 'GoCardless Bill ('.$oBill->id.')Instant Paid: ' . print_r($oBill, true), 'Successful');
         } else {
-            # log payment pending
+            
+            # log payment as pending
             logTransaction($gateway['paymentmethod'],'GoCardless Bill ('.$oBill->id.') Pending','Pending');
         }
 

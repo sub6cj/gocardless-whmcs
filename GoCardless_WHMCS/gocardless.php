@@ -154,9 +154,15 @@
         
         # check the invoice, to see if it has a record with a valid resource ID. If it does, the invoice is pending payment.
         # we will return a message on the invoice to prevent duplicate payment attempts
-        if (get_query_val('mod_gocardless', 'id', array('invoiceid' => $params['invoiceid'], 'resource_id' => array('sqltype' => 'NEQ', 'value' => '')))) {
-            # Pending Payment Found - Prevent Duplicate Payment with a Msg
-            return '<strong>Your payment is currently pending and will be processed within 3-5 days.</strong>';
+        $aGC = mysql_fetch_assoc(select_query('mod_gocardless','id,payment_failed', array('invoiceid' => $params['invoiceid'], 'resource_id' => array('sqltype' => 'NEQ', 'value' => ''))));
+        if ($aGC['id']) {
+            if($aGC['payment_failed'] == 0) {
+                # Pending Payment Found - Prevent Duplicate Payment with a Msg
+                return '<strong>Your payment is currently pending and will be processed within 3-5 days.</strong>';
+            } else {
+                # display a message to the user suggesting that a payment against the invoice has failed
+                return '<strong>One or more payment attempts have failed against this invoice. Please contact our support department.</strong>';
+            }
         
         }
         
@@ -218,7 +224,7 @@
 			
 			# Button title
             $title = 'Create Subscription with GoCardless';
-			
+            
 			# create GoCardless preauth URL using the GoCardless library
             $url = GoCardless::new_pre_authorization_url(array(
 				'max_amount'      => $aRecurrings['recurringamount'],
@@ -229,9 +235,9 @@
                 # convert $aRecurrings['recurringcycleunits'] to valid value e.g. day,month,year
 				'interval_unit'   => strtolower(substr($aRecurrings['recurringcycleunits'],0,-1)),
                 # set the start date to the creation date of the invoice - 2 days
-                'start_at'        => date_format(strtotime(' -2 days',strtotime($aInvoice['date'])),'Y-m-d'),
+                'start_at'        => date_format(date_create($aInvoice['date'].' -2 days'),'Y-m-d'),
 				'user'            => $aUser,
-				'state'           => $params['invoiceid'] . ':' . $params['amount']
+				'state'           => $params['invoiceid'] . ':' . $aRecurrings['recurringamount']
 			));
             
             # return the recurring preauth button code
@@ -349,11 +355,13 @@
                  `invoiceid` int(11) NOT NULL,
                  `billcreated` int(11) default NULL,
                  `resource_id` varchar(16) default NULL,
+                 `setup_id` varchar(16) default NULL,
                  `preauth_id` varchar(16) default NULL,
                  `payment_failed` tinyint(1) NOT NULL default '0',
                  PRIMARY KEY  (`id`),
                  UNIQUE KEY `invoiceid` (`invoiceid`),
-                 UNIQUE KEY `resource_id` (`resource_id`))";
+                 UNIQUE KEY `resource_id` (`resource_id`),
+                 UNIQUE KEY `setup_id` (`setup_id`))";
 
         full_query($query);
 
