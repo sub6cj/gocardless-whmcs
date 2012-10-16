@@ -10,7 +10,7 @@
     require_once ROOTDIR . '/modules/gateways/gocardless/GoCardless.php';
 
     define('GC_VERSION', '0.1.0');
-    
+
     function po($val,$kill=true) {
         echo '<pre>'.print_r($val,true);$kill ? exit : null;
     }
@@ -21,7 +21,7 @@
     ** used within the admin interface. These params are then stored in `tblpaymentgateways`
     **/
     function gocardless_config() {
-        
+
         global $CONFIG;
 
         $aConfig = array(
@@ -95,14 +95,14 @@
         return $aConfig;
 
     }
-    
+
     /**
     * Checks whether test mode is enabled or disabled
     * and sets appropriate details against GoCardless object
     * @param array $params Array of parameters that contains gateway details
     */
     function gocardless_set_account_details($params=null) {
-        
+
         # check if params have been supplied, if not attempt
         # to use global params
         if(is_null($params)) {
@@ -110,37 +110,37 @@
             global $params;
         }
         global $CONFIG;
-        
+
         # check we have been able to obtain the correct params
         if(!isset($params['app_id'])) {
             throw new Exception('Could not get GoCardless params');
         }
-        
+
         # check if we are running in Sandbox mode (test_mode)
         if($params['test_mode'] == 'on') {
             # Initialise SANDBOX Account Details
             GoCardless::$environment = 'sandbox';
             GoCardless::set_account_details(array(
-                'app_id'        => $params['dev_app_id'],
-                'app_secret'    => $params['dev_app_secret'],
-                'merchant_id'   => $params['dev_merchant_id'],
-                'access_token'  => $params['dev_access_token'],
-                'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
-                'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
-            ));
+                    'app_id'        => $params['dev_app_id'],
+                    'app_secret'    => $params['dev_app_secret'],
+                    'merchant_id'   => $params['dev_merchant_id'],
+                    'access_token'  => $params['dev_access_token'],
+                    'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+                    'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
+                ));
         } else {
             # Initialise LIVE Account Details
             GoCardless::set_account_details(array(
-                'app_id'        => $params['app_id'],
-                'app_secret'    => $params['app_secret'],
-                'merchant_id'   => $params['merchant_id'],
-                'access_token'  => $params['access_token'],
-                'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
-                'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
-            ));
+                    'app_id'        => $params['app_id'],
+                    'app_secret'    => $params['app_secret'],
+                    'merchant_id'   => $params['merchant_id'],
+                    'access_token'  => $params['access_token'],
+                    'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+                    'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
+                ));
         }
     }
-    
+
     /**
     ** Builds the payment link for WHMCS users to be redirected to GoCardless
     **/
@@ -151,7 +151,7 @@
 
         # create GoCardless database if it hasn't already been created
         gocardless_createdb();
-        
+
         # check the invoice, to see if it has a record with a valid resource ID. If it does, the invoice is pending payment.
         # we will return a message on the invoice to prevent duplicate payment attempts
         $aGC = mysql_fetch_assoc(select_query('mod_gocardless','id,payment_failed', array('invoiceid' => $params['invoiceid'], 'resource_id' => array('sqltype' => 'NEQ', 'value' => ''))));
@@ -163,31 +163,31 @@
                 # display a message to the user suggesting that a payment against the invoice has failed
                 return '<strong>One or more payment attempts have failed against this invoice. Please contact our support department.</strong>';
             }
-        
+
         }
-        
+
         # get relevant invoice data
         $aRecurrings = getRecurringBillingValues($params['invoiceid']);
         $firstcylceunits = strtoupper(substr($aRecurrings['firstcycleunits'],0,1));
-        
+
         # check a number of conditions to see if it is possible to setup a preauth
         if(($params['oneoffonly'] == 'on') ||
-           ($aRecurrings === false) || 
-           ($aRecurrings['recurringamount'] <= 0) || 
-           # if the first cycle period is greater than 90 days, 24 months or
-           # 5 years we dont want to create a subscription!
-           ((90 < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'D')) ||
-           ((24 < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'M')) ||
-           ((5  < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'Y'))) {
+            ($aRecurrings === false) || 
+            ($aRecurrings['recurringamount'] <= 0) || 
+            # if the first cycle period is greater than 90 days, 24 months or
+            # 5 years we dont want to create a subscription!
+            ((90 < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'D')) ||
+            ((24 < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'M')) ||
+            ((5  < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'Y'))) {
             $noPreauth = true;
         } else {
             $noPreauth = false;
         }
-        
+
         # set appropriate GoCardless API details
         gocardless_set_account_details($params);
 
-		# set user array based on params parsed to $link
+        # set user array based on params parsed to $link
         $aUser = array(
             'first_name'        => $params['clientdetails']['firstname'],
             'last_name'         => $params['clientdetails']['lastname'],
@@ -198,109 +198,109 @@
             'billing_county'    => $params['clientdetails']['state'],
             'billing_postcode'  => $params['clientdetails']['postcode'],
         );
-        
-		# if one of the $noPreauth conditions have been met, display a one time payment button
+
+        # if one of the $noPreauth conditions have been met, display a one time payment button
         if ($noPreauth) {
-			# we are making a one off payment, display the appropriate code
-			# Button title
+            # we are making a one off payment, display the appropriate code
+            # Button title
             $title = 'Pay Now with GoCardless';
-			
-			# create GoCardless one off payment URL using the GoCardless library
+
+            # create GoCardless one off payment URL using the GoCardless library
             $url = GoCardless::new_bill_url(array(
-				'amount'  => $params['amount'],
-				'name'    => $params['description'],
-				'user'    => $aUser,
-				'state'   => $params['invoiceid'] . ':' . $params['amount']
-			));
+                    'amount'  => $params['amount'],
+                    'name'    => $params['description'],
+                    'user'    => $aUser,
+                    'state'   => $params['invoiceid'] . ':' . $params['amount']
+                ));
 
             # return one time payment button code
             $sButton = (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . '<a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
 
         } else {
             # we are setting up a preauth (description friendly name), display the appropriate code
-            
+
             # get the invoice from the database because we need the invoice creation date
             $aInvoice = mysql_fetch_assoc(select_query('tblinvoices','date',array('id' => $params['invoiceid'])));
-			
-			# Button title
+
+            # Button title
             $title = 'Create Subscription with GoCardless';
-            
+
             # create GoCardless preauth URL using the GoCardless library
             $url = GoCardless::new_pre_authorization_url(array(
-                'max_amount' => $aRecurrings['recurringamount'],
-                # set the setup fee as the first payment amount - recurring amount
-                'setup_fee' => ($aRecurrings['firstpaymentamount'] > $aRecurrings['recurringamount']) ? ($aRecurrings['firstpaymentamount']-$aRecurrings['recurringamount']) : 0,
-                'name' => $params['description'],
-                'interval_length' => $aRecurrings['recurringcycleperiod'],
-                # convert $aRecurrings['recurringcycleunits'] to valid value e.g. day,month,year
-                'interval_unit' => strtolower(substr($aRecurrings['recurringcycleunits'],0,-1)),
-                # set the start date to the creation date of the invoice - 2 days
-                'start_at' => date_format(date_create($aInvoice['date'].' -2 days'),'Y-m-d'),
-                'user' => $aUser,
-                'state' => $params['invoiceid'] . ':' . $aRecurrings['recurringamount']
-            ));
-            
+                    'max_amount' => $aRecurrings['recurringamount'],
+                    # set the setup fee as the first payment amount - recurring amount
+                    'setup_fee' => ($aRecurrings['firstpaymentamount'] > $aRecurrings['recurringamount']) ? ($aRecurrings['firstpaymentamount']-$aRecurrings['recurringamount']) : 0,
+                    'name' => $params['description'],
+                    'interval_length' => $aRecurrings['recurringcycleperiod'],
+                    # convert $aRecurrings['recurringcycleunits'] to valid value e.g. day,month,year
+                    'interval_unit' => strtolower(substr($aRecurrings['recurringcycleunits'],0,-1)),
+                    # set the start date to the creation date of the invoice - 2 days
+                    'start_at' => date_format(date_create($aInvoice['date'].' -2 days'),'Y-m-d'),
+                    'user' => $aUser,
+                    'state' => $params['invoiceid'] . ':' . $aRecurrings['recurringamount']
+                ));
+
             # return the recurring preauth button code
             $sButton =  (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . 'When you get to GoCardless you will see an agreement for the <b>maximum possible amount</b> we\'ll ever need to charge you in a single invoice for this order, with a frequency of the shortest item\'s billing cycle. But rest assured we will never charge you more than the actual amount due.
             <br /><a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
 
         }
-        
+
         # return the formatted button
         return $sButton;
     }
 
-	/**
-	** WHMCS method to capture payments
-	** This method is triggered by WHMCS in an attempt to capture a PreAuth payment
-	**
-	** @param array $params Array of paramaters parsed by WHMCS
-	**/
+    /**
+    ** WHMCS method to capture payments
+    ** This method is triggered by WHMCS in an attempt to capture a PreAuth payment
+    **
+    ** @param array $params Array of paramaters parsed by WHMCS
+    **/
     function gocardless_capture($params) {
-		
-		# create GoCardless DB if it hasn't already been created
+
+        # create GoCardless DB if it hasn't already been created
         gocardless_createdb();
-		
-		# Send the relevant API information to the GoCardless class for future processing
+
+        # Send the relevant API information to the GoCardless class for future processing
         gocardless_set_account_details($params);
 
-		# check against the database if the bill relevant to this invoice has already been created
+        # check against the database if the bill relevant to this invoice has already been created
         $existing_payment_query = select_query('mod_gocardless', 'resource_id', array('invoiceid' => $params['invoiceid']));
         $existing_payment = mysql_fetch_assoc($existing_payment_query);
 
-		# check if any rows have been returned or if the returned result is empty.
-		# If no rows were returned, the bill has not already been made for this invoice
-		# If a row was returned but the resource ID is empty, the bill has not been completed
-		# we have already raised a bill with GoCardless (in theory)
+        # check if any rows have been returned or if the returned result is empty.
+        # If no rows were returned, the bill has not already been made for this invoice
+        # If a row was returned but the resource ID is empty, the bill has not been completed
+        # we have already raised a bill with GoCardless (in theory)
         if (!mysql_num_rows($existing_payment_query) || empty($existing_payment['resource_id'])) {
-			
-			# query the database to get the relid of all invoice items
+
+            # query the database to get the relid of all invoice items
             $invoice_item_query = select_query('tblinvoiceitems', 'relid', array('invoiceid' => $params['invoiceid'], 'type' => 'Hosting'));
-			
-			# loop through each returned (each invoice item) and attempt to find a subscription ID
+
+            # loop through each returned (each invoice item) and attempt to find a subscription ID
             while ($invoice_item = mysql_fetch_assoc($invoice_item_query)) {
                 $package_query = select_query('tblhosting', 'subscriptionid', array('id' => $invoice_item['relid']));
                 $package = mysql_fetch_assoc($package_query);
-				
-				# if we have found a subscriptionID, store it in $preauthid
+
+                # if we have found a subscriptionID, store it in $preauthid
                 if (!empty($package['subscriptionid'])) {
                     $preauthid = $package['subscriptionid'];
                 }
             }
-			
-			# now we are out of the loop, check if we have been able to get the PreAuth ID
+
+            # now we are out of the loop, check if we have been able to get the PreAuth ID
             if (isset($preauthid)) {
-				
-				# we have found the PreAuth ID, so get it from GoCardless and process a new bill
-				
+
+                # we have found the PreAuth ID, so get it from GoCardless and process a new bill
+
                 $pre_auth = GoCardless_PreAuthorization::find($preauthid);
-				
-				# check the preauth returned something
-				if($pre_auth) {
-					
-					# Create a bill with the $pre_auth object
+
+                # check the preauth returned something
+                if($pre_auth) {
+
+                    # Create a bill with the $pre_auth object
                     try {
-					    $bill = $pre_auth->create_bill(array('amount' => $params['amount']));
+                        $bill = $pre_auth->create_bill(array('amount' => $params['amount']));
                     } catch (Exception $e) {
                         # we failed to create a new bill, lets update mod_gocardless to alert the admin why payment hasnt been received,
                         # log this in the transaction log and exit out
@@ -308,31 +308,31 @@
                         logTransaction($params['paymentmethod'],"Failed to create GoCardless bill: " . print_r($e,true) . print_r($bill,true),'Failed');
                         exit;
                     }
-					
-					# check that the bill has been created
-					if ($bill->id) {
-						# check if the bill already exists in the database, if it does we will just update the record
-						# if not, we will create a new record and record the transaction
-						if (!mysql_num_rows($existing_payment_query)) {
-							# Add the bill ID to the table and mark the transaction as pending
-							insert_query('mod_gocardless', array('invoiceid' => $params['invoiceid'], 'billcreated' => 1, 'resource_id' => $bill->id, 'preauth_id'  => $pre_auth->id));
-							logTransaction('GoCardless', 'Transaction initiated successfully, confirmation will take 2-5 days' . "\nPreAuth: " . $pre_auth->id . "\nBill ID: " . $bill->id, 'Pending');
-						} else {
-							# update the table with the bill ID
-							update_query('mod_gocardless', array('billcreated' => 1, 'resource_id' => $bill->id), array('invoiceid' => $params['invoiceid']));
-						}
 
-					}
-				} else {
-					# PreAuth could not be verified
-					logTransaction('GoCardless','Pre-Authorisation could not be verified','Incomplete');
-				}
-				
+                    # check that the bill has been created
+                    if ($bill->id) {
+                        # check if the bill already exists in the database, if it does we will just update the record
+                        # if not, we will create a new record and record the transaction
+                        if (!mysql_num_rows($existing_payment_query)) {
+                            # Add the bill ID to the table and mark the transaction as pending
+                            insert_query('mod_gocardless', array('invoiceid' => $params['invoiceid'], 'billcreated' => 1, 'resource_id' => $bill->id, 'preauth_id'  => $pre_auth->id));
+                            logTransaction('GoCardless', 'Transaction initiated successfully, confirmation will take 2-5 days' . "\nPreAuth: " . $pre_auth->id . "\nBill ID: " . $bill->id, 'Pending');
+                        } else {
+                            # update the table with the bill ID
+                            update_query('mod_gocardless', array('billcreated' => 1, 'resource_id' => $bill->id), array('invoiceid' => $params['invoiceid']));
+                        }
+
+                    }
+                } else {
+                    # PreAuth could not be verified
+                    logTransaction('GoCardless','Pre-Authorisation could not be verified','Incomplete');
+                }
+
 
             } else {
-				# we couldn't find the PreAuthID meaning at this point all we can do is give up!
-				# the client will have to setup a new preauth to begin recurring payments again
-				# or pay using an alternative method
+                # we couldn't find the PreAuthID meaning at this point all we can do is give up!
+                # the client will have to setup a new preauth to begin recurring payments again
+                # or pay using an alternative method
                 logTransaction('GoCardless', 'No pre-authorisation found', 'Incomplete');
             }
 
@@ -341,36 +341,36 @@
     }
 
     /**
-	** Supress credit card request on checkout
-	**/
+    ** Supress credit card request on checkout
+    **/
     function gocardless_nolocalcc() {}
 
-	/**
-	** Create mod_gocardless table if it does not already exist
-	**/
+    /**
+    ** Create mod_gocardless table if it does not already exist
+    **/
     function gocardless_createdb() {
 
         $query = "CREATE TABLE IF NOT EXISTS `mod_gocardless` (
-                 `id` int(11) NOT NULL auto_increment,
-                 `invoiceid` int(11) NOT NULL,
-                 `billcreated` int(11) default NULL,
-                 `resource_id` varchar(16) default NULL,
-                 `setup_id` varchar(16) default NULL,
-                 `preauth_id` varchar(16) default NULL,
-                 `payment_failed` tinyint(1) NOT NULL default '0',
-                 PRIMARY KEY  (`id`),
-                 UNIQUE KEY `invoiceid` (`invoiceid`),
-                 UNIQUE KEY `resource_id` (`resource_id`),
-                 UNIQUE KEY `setup_id` (`setup_id`))";
+        `id` int(11) NOT NULL auto_increment,
+        `invoiceid` int(11) NOT NULL,
+        `billcreated` int(11) default NULL,
+        `resource_id` varchar(16) default NULL,
+        `setup_id` varchar(16) default NULL,
+        `preauth_id` varchar(16) default NULL,
+        `payment_failed` tinyint(1) NOT NULL default '0',
+        PRIMARY KEY  (`id`),
+        UNIQUE KEY `invoiceid` (`invoiceid`),
+        UNIQUE KEY `resource_id` (`resource_id`),
+        UNIQUE KEY `setup_id` (`setup_id`))";
 
         full_query($query);
 
     }
-	
-	/**
-	** Display payment status message to admin when the preauth
-	** has been setup but the payment is incomplete
-	**/
+
+    /**
+    ** Display payment status message to admin when the preauth
+    ** has been setup but the payment is incomplete
+    **/
     function gocardless_adminstatusmsg($vars) {
 
         if ($vars['status']=='Unpaid') {
@@ -378,7 +378,7 @@
             # get relevant invoice information from the database
             $d = select_query('mod_gocardless',"id,payment_failed",array('invoiceid' => $vars['invoiceid']));
             $aResult = mysql_fetch_assoc($d);
-            
+
             # check we have been able to obtain the details
             if($aResult['id']) {
                 if($aResult['payment_failed']) {
