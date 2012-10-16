@@ -130,6 +130,7 @@
                 ));
         } else {
             # Initialise LIVE Account Details
+			GoCardless::$environment = 'production';
             GoCardless::set_account_details(array(
                     'app_id'        => $params['app_id'],
                     'app_secret'    => $params['app_secret'],
