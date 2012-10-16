@@ -3,7 +3,7 @@
     * GoCardless WHMCS module
     *
     * @author WHMCS <info@whmcs.com>
-    * @version 0.1.0
+    * @version 0.2.0
     */
 
     # load GoCardless library
@@ -225,20 +225,20 @@
 			# Button title
             $title = 'Create Subscription with GoCardless';
             
-			# create GoCardless preauth URL using the GoCardless library
+            # create GoCardless preauth URL using the GoCardless library
             $url = GoCardless::new_pre_authorization_url(array(
-				'max_amount'      => $aRecurrings['recurringamount'],
+                'max_amount' => $aRecurrings['recurringamount'],
                 # set the setup fee as the first payment amount - recurring amount
-                'setup_fee'       => ($aRecurrings['firstpaymentamount']-$aRecurrings['recurringamount']),
-				'name'            => $params['description'],
-				'interval_length' => $aRecurrings['recurringcycleperiod'],
+                'setup_fee' => ($aRecurrings['firstpaymentamount'] > $aRecurrings['recurringamount']) ? ($aRecurrings['firstpaymentamount']-$aRecurrings['recurringamount']) : 0,
+                'name' => $params['description'],
+                'interval_length' => $aRecurrings['recurringcycleperiod'],
                 # convert $aRecurrings['recurringcycleunits'] to valid value e.g. day,month,year
-				'interval_unit'   => strtolower(substr($aRecurrings['recurringcycleunits'],0,-1)),
+                'interval_unit' => strtolower(substr($aRecurrings['recurringcycleunits'],0,-1)),
                 # set the start date to the creation date of the invoice - 2 days
-                'start_at'        => date_format(date_create($aInvoice['date'].' -2 days'),'Y-m-d'),
-				'user'            => $aUser,
-				'state'           => $params['invoiceid'] . ':' . $aRecurrings['recurringamount']
-			));
+                'start_at' => date_format(date_create($aInvoice['date'].' -2 days'),'Y-m-d'),
+                'user' => $aUser,
+                'state' => $params['invoiceid'] . ':' . $aRecurrings['recurringamount']
+            ));
             
             # return the recurring preauth button code
             $sButton =  (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . 'When you get to GoCardless you will see an agreement for the <b>maximum possible amount</b> we\'ll ever need to charge you in a single invoice for this order, with a frequency of the shortest item\'s billing cycle. But rest assured we will never charge you more than the actual amount due.
