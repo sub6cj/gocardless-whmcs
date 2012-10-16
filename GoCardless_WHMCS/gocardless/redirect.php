@@ -134,18 +134,19 @@
         if($gateway['instantpaid'] == 'on') {
             
             # convert currency where necessary (GoCardless only handles GBP)
-            if(($currency = getCurrency($res['userid']) != 'GBP') && ($gateway['currency'] == 'GBP')) {
-                # the users currency is not in GBP, convert to the users currency
-                $oBill->amount = convertCurrency($oBill->amount,'GBP',$currency);
-                $oBill->gocardless_fee = convertCurrency($oBill->gocardless_fee,'GBP',$currency);
+            $aCurrency = getCurrency($res['userid']);
+            if($gateway['convertto'] && ($aCurrency['id'] != $gateway['convertto'])) {
+                # the users currency is not the same as the GoCardless currency, convert to the users currency
+                $oBill->amount = convertCurrency($oBill->amount,$gateway['convertto'],$aCurrency['id']);
+                $oBill->gocardless_fee = convertCurrency($oBill->gocardless_fee,$gateway['convertto'],$aCurrency['id']);
                 
                 # currency conversion on the setup fee bill
                 if(isset($oSetupBill)) {
-                    $oSetupBill->amount = convertCurrency($oBill->amount,'GBP',$currency);
-                    $oSetupBill->gocardless_fee = convertCurrency($oBill->gocardless_fee,'GBP',$currency);
+                    $oSetupBill->amount = convertCurrency($oBill->amount,$gateway['convertto'],$aCurrency['id']);
+                    $oSetupBill->gocardless_fee = convertCurrency($oBill->gocardless_fee,$gateway['convertto'],$aCurrency['id']);
                 }
             }
-            
+
             # check if we are handling a preauth setup fee
             # if we are then we need to add it to the total bill
             if(isset($oSetupBill)) {

@@ -91,12 +91,13 @@
                             $aBill['fees'] = ($aBill['amount'] - $aBill['amount_minus_fees']);
                             
                             # convert the currency where necessary
-                            if(($currency = getCurrency($userID) != 'GBP') && ($gateway['currency'] == 'GBP')) {
-                                # the users currency is not in GBP, convert to the users currency
-                                $aBill['amount'] = convertCurrency($aBill['amount'],'GBP',$currency);
-                                $aBill['fees']   = convertCurrency($aBill['fees'],'GBP',$currency);
+                            $aCurrency = getCurrency($userID);
+                            if($gateway['convertto'] && ($aCurrency['id'] != $gateway['convertto'])) {
+                                # the users currency is not the same as the GoCardless currency, convert to the users currency
+                                $aBill['amount'] = convertCurrency($aBill['amount'],$gateway['convertto'],$aCurrency['id']);
+                                $aBill['fees']   = convertCurrency($aBill['fees'],$gateway['convertto'],$aCurrency['id']);
                             }
-                                
+                            
                             # if we get to this point, we have verified the callback and performed sanity checks
                             # add a payment to the invoice and create a transaction log
                             addInvoicePayment($invoiceID, $aBill['id'], $aBill['amount'], $aBill['fees'], $gateway['paymentmethod']);
