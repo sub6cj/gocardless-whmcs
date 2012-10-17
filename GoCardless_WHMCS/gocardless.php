@@ -169,7 +169,7 @@
 
         # get relevant invoice data
         $aRecurrings = getRecurringBillingValues($params['invoiceid']);
-        $recurringcycleunit = strtolower(substr($aRecurrings['firstcycleunits'],0,-1));
+        $recurringcycleunit = strtolower(substr($aRecurrings['recurringcycleunits'],0,-1));
 
         # check a number of conditions to see if it is possible to setup a preauth
         if(($params['oneoffonly'] == 'on') ||
