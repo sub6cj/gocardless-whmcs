@@ -102,6 +102,9 @@
                         # add a payment to the invoice and create a transaction log
                         addInvoicePayment($invoiceID, $aBill['id'], $aBill['amount'], $aBill['fees'], $gateway['paymentmethod']);
                         logTransaction($gateway['paymentmethod'], 'Bill payment completed ('.$aBill['id'].'). Invoice #'.$invoiceID, 'Successful');
+                        
+                        # clean up for next loop
+                        unset($invoiceID,$userID);
 
                     } else {
                         header('HTTP/1.1 400 Bad Request');exit;
@@ -130,13 +133,18 @@
                         # check if the invoice is marked as paid already
                         if($aInvoice['status'] == 'Paid') {
                             # the invoice is marked as paid already (mark as paid instantly)
-                            # update the corresponding transaction to mark as FAIL and mark the invoice as unpaid
-                            update_query('tblaccounts', array('amountin' => "0", 'fees' => "0", 'transid' => (($val['action'] == 'failed') ? 'FAIL_' : 'REFUND_') . $aBill['id']),array('invoiceid' => $invoiceID, 'transid' => $aBill['id']));
                             update_query('tblinvoices', array('status' => 'Unpaid'), array('id' => $invoiceID));
                         }
+                        
+                        # update the corresponding transaction to mark as FAIL and mark the invoice as unpaid
+                        update_query('tblaccounts', array('amountin' => "0", 'fees' => "0", 'transid' => (($val['action'] == 'failed') ? 'FAIL_' : 'REFUND_') . $aBill['id']),array('invoiceid' => $invoiceID, 'transid' => $aBill['id']));
 
                         # log the failed/refunded transaction in the gateway log as status 'Payment Failed/Refunded'
                         logTransaction($gateway['paymentmethod'],"GoCardless Payment {$val['action']}.\r\nPreauth ID: {$aBill['source_id']}\nBill ID: {$aBill['id']}: " . print_r($aBill,true),'Bill ' . ucfirst($val['action']));
+                        
+                        # clean up for next loop
+                        unset($invoiceID,$userID);
+                        
                     } else {
                         header('HTTP/1.1 400 Bad Request');exit;
                     }
