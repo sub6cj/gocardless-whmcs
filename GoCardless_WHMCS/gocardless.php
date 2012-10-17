@@ -86,9 +86,9 @@
                 'Description' => 'Tick to immediately mark invoices paid after payment is initiated (despite clearing not being confirmed for 3-5 days)'
             ),
             'test_mode' => array(
-                'FriendlyName' => 'Test Mode',
+                'FriendlyName' => 'Sandbox Mode',
                 'Type' => 'yesno',
-                'Description' => 'Tick to enable test mode'
+                'Description' => 'Tick to enable the GoCardless Sandbox Environment'
             )
         );
 
