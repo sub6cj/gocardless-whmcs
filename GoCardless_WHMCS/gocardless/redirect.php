@@ -87,7 +87,9 @@
                 $oSetupBill = $aoSetupBills[0];
                 $setup_id = $oSetupBill->id;
                 unset($aoSetupBills);
-            }
+            } else {
+				
+			}
 
             # create a GoCardless bill and store it in $bill
             try {
@@ -98,11 +100,20 @@
                 exit('Your request could not be completed');
             }
 
-            # if we have been able to create the bill, the preauth ID being null suggests payment is pending
-            # (this will display in the admin)
-            if ($oBill->id) {
-                insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $oBill->id, 'setup_id' => $setup_id, 'preauth_id' => $pre_auth->id));
-            }
+			try {
+				# if we have been able to create the bill, the preauth ID being null suggests payment is pending
+				# (this will display in the admin)
+				if ($oBill->id) {
+					if(!insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $oBill->id, 'setup_id' => $setup_id, 'preauth_id' => $pre_auth->id))) {
+						throw new Exception('Failed to record new mod_gocardless record for bill #'.$oBill->id);
+					}
+				} else {
+					throw new Exception('Could not create GoCardless bill on Preauth #'.$pre_auth->id);
+				}
+			} catch (Exception $e) {
+				logTransaction($gateway['paymentmethod'],$e->getMessage().print_r($e,true));
+				exit('Failed to record transaction, please contact support for more details.');
+			}
 
             # query tblinvoiceitems to get the related service ID
             # update subscription ID with the resource ID on all hosting services corresponding with the invoice
@@ -155,11 +166,10 @@
 
             # add the payment to the invoice
             addInvoicePayment($invoiceID, $oBill->id, $oBill->amount, $oBill->gocardless_fees, $gateway['paymentmethod']);
-            logTransaction($gateway['paymentmethod'], 'GoCardless Bill ('.$oBill->id.')Instant Paid: ' . print_r($oBill, true), 'Successful');
+            logTransaction($gateway['paymentmethod'], 'GoCardless Bill ('.$oBill->id.')Instant Paid: (Invoice #'.$invoiceID.')' . print_r($oBill, true), 'Successful');
         } else {
-
             # log payment as pending
-            logTransaction($gateway['paymentmethod'],'GoCardless Bill ('.$oBill->id.') Pending','Pending');
+            logTransaction($gateway['paymentmethod'],'GoCardless Bill ('.$oBill->id.') Pending. Invoice #' . $invoiceID,'Pending');
         }
 
         # if we get to this point, we have verified everything we need to, redirect to invoice
