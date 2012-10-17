@@ -80,16 +80,14 @@
             $pre_auth = &$confirmed_resource;
 
             # check if we have a setup_fee
-            $setup_id = null;
+            $setup_id = false;
             if($pre_auth->setup_fee > 0) {
                 # store the bill in $oSetupBill for later user
                 $aoSetupBills = $pre_auth->bills();
                 $oSetupBill = $aoSetupBills[0];
                 $setup_id = $oSetupBill->id;
                 unset($aoSetupBills);
-            } else {
-				$setup_id = '';
-			}
+            }
 
             # create a GoCardless bill and store it in $bill
             try {
@@ -104,9 +102,17 @@
 				# if we have been able to create the bill, the preauth ID being null suggests payment is pending
 				# (this will display in the admin)
 				if ($oBill->id) {
-					if(!insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $oBill->id, 'setup_id' => $setup_id, 'preauth_id' => $pre_auth->id))) {
-						throw new Exception('Failed to record new mod_gocardless record for bill #'.$oBill->id);
-					}
+                    if($setup_id) {
+                        # if we have a setup ID, we want to insert this into the query
+                        if(!insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $oBill->id, 'setup_id' => $setup_id, 'preauth_id' => $pre_auth->id))) {
+                            throw new Exception('Failed to record new mod_gocardless record for bill #'.$oBill->id);
+                        }
+                    } else {
+                        # no setup ID bill
+                        if(!insert_query('mod_gocardless', array('invoiceid' => $invoiceID, 'billcreated' => 1, 'resource_id' => $oBill->id, 'preauth_id' => $pre_auth->id))) {
+                            throw new Exception('Failed to record new mod_gocardless record for bill #'.$oBill->id);
+                        }
+                    }
 				} else {
 					throw new Exception('Could not create GoCardless bill on Preauth #'.$pre_auth->id);
 				}

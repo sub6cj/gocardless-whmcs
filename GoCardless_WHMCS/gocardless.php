@@ -169,17 +169,12 @@
 
         # get relevant invoice data
         $aRecurrings = getRecurringBillingValues($params['invoiceid']);
-        $firstcylceunits = strtoupper(substr($aRecurrings['firstcycleunits'],0,1));
+        $recurringcycleunit = strtolower(substr($aRecurrings['firstcycleunits'],0,1));
 
         # check a number of conditions to see if it is possible to setup a preauth
         if(($params['oneoffonly'] == 'on') ||
             ($aRecurrings === false) || 
-            ($aRecurrings['recurringamount'] <= 0) || 
-            # if the first cycle period is greater than 90 days, 24 months or
-            # 5 years we dont want to create a subscription!
-            ((90 < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'D')) ||
-            ((24 < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'M')) ||
-            ((5  < $aRecurrings['firstcycleperiod']) && ($firstcylceunits == 'Y'))) {
+            ($aRecurrings['recurringamount'] <= 0)) {
             $noPreauth = true;
         } else {
             $noPreauth = false;
@@ -222,6 +217,13 @@
 
             # get the invoice from the database because we need the invoice creation date
             $aInvoice = mysql_fetch_assoc(select_query('tblinvoices','date',array('id' => $params['invoiceid'])));
+            
+            # GoCardless only supports months in the billing period so
+            # if WHMCS is sending a year value we need to address this
+            if($recurringcycleunit == 'year') {
+                $recurringcycleunit = 'month';
+                $aRecurrings['recurringcycleperiod'] = ($aRecurrings['recurringcycleperiod']*12);
+            }
 
             # Button title
             $title = 'Create Subscription with GoCardless';
@@ -234,7 +236,7 @@
                     'name' => $params['description'],
                     'interval_length' => $aRecurrings['recurringcycleperiod'],
                     # convert $aRecurrings['recurringcycleunits'] to valid value e.g. day,month,year
-                    'interval_unit' => strtolower(substr($aRecurrings['recurringcycleunits'],0,-1)),
+                    'interval_unit' => $recurringcycleunit,
                     # set the start date to the creation date of the invoice - 2 days
                     'start_at' => date_format(date_create($aInvoice['date'].' -2 days'),'Y-m-d'),
                     'user' => $aUser,
