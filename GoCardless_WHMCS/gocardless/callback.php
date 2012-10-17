@@ -32,7 +32,7 @@
     if(GoCardless::validate_webhook($webhook_array['payload']) !== true) {
         # we could not validate the web hook
         header('HTTP/1.1 400 Bad Request');
-        exit;
+        exit(__LINE__.': Payload could not be verified');
     }
 
     # store various elements of the webhook array into params
@@ -59,7 +59,8 @@
                 break;
             default:
                 # we cannot handle this request
-                header('HTTP/1.1 400 Bad Request');exit;
+                header('HTTP/1.1 400 Bad Request');
+                exit(__LINE__.': Unknown pre-authorisation action');
                 break;
         }
 
@@ -75,7 +76,7 @@
                 foreach($val['bills'] as $aBill) {
 
                     # get the associated invoiceID based on the bill ID
-                    $invoiceID = mysql_result(full_query("SELECT `invoiceid` FROM `mod_gocardless` WHERE `resource_id` = '{$aBill['id']}' OR `setup_id` = '{$aBill['id']}'"),0,0);
+                    $invoiceID = mysql_result(full_query("SELECT `invoiceid` FROM `mod_gocardless` WHERE `resource_id` = '".mysql_real_escape_string($aBill['id'])."' OR `setup_id` = '".mysql_real_escape_string($aBill['id'])."'"),0,0);
 
                     # verify we have been able to get the invoice ID
                     if($invoiceID) {
@@ -107,7 +108,9 @@
                         unset($invoiceID,$userID);
 
                     } else {
-                        header('HTTP/1.1 400 Bad Request');exit;
+                        header('HTTP/1.1 400 Bad Request');
+                        logTransaction($gateway['paymentmethod'],'Could not find invoice with ID. callback.php ' . __LINE__ . $invoiceID,'Failed');
+                        exit(__LINE__.': Could not get invoice ID for ' . htmlentities($aBill['id']));
                     }
 
                 }
@@ -119,7 +122,7 @@
                 foreach($val['bills'] as $aBill) {
 
                     # attempt to obtain the mod_gocardless record
-                    $invoiceID = mysql_result(full_query("SELECT `invoiceid` FROM `mod_gocardless` WHERE `resource_id` = '{$aBill['id']}' OR `setup_id` = '{$aBill['id']}'"),0,0);
+                    $invoiceID = mysql_result(full_query("SELECT `invoiceid` FROM `mod_gocardless` WHERE `resource_id` = '".mysql_real_escape_string($aBill['id'])."' OR `setup_id` = '".mysql_real_escape_string($aBill['id'])."'"),0,0);
 
                     # verify we have been able to get the invoice ID
                     if($invoiceID) {
@@ -128,7 +131,7 @@
                         $aInvoice = mysql_fetch_assoc(select_query('tblinvoices','status',array('id' => $invoiceID)));
 
                         # mark the GoCardless record as failed (this will be displayed on the admin invoice page)
-                        full_query("UPDATE `mod_gocardless` SET `payment_failed` = 1 WHERE `resource_id` = '{$aBill['id']}' OR `setup_id` = '{$aBill['id']}' AND `payment_failed` = '0'");
+                        full_query("UPDATE `mod_gocardless` SET `payment_failed` = 1 WHERE `resource_id` = '".mysql_real_escape_string($aBill['id'])."' OR `setup_id` = '".mysql_real_escape_string($aBill['id'])."' AND `payment_failed` = '0'");
 
                         # check if the invoice is marked as paid already
                         if($aInvoice['status'] == 'Paid') {
@@ -146,7 +149,9 @@
                         unset($invoiceID,$userID);
                         
                     } else {
-                        header('HTTP/1.1 400 Bad Request');exit;
+                        header('HTTP/1.1 400 Bad Request');
+                        logTransaction($gateway['paymentmethod'],'Could not find invoice with ID. callback.php ' . __LINE__ . $invoiceID,'Failed');
+                        exit;
                     }
                 }
                 break;
@@ -161,6 +166,8 @@
         break;
         default:
             header('HTTP/1.1 400 Bad Request');
+            logTransaction($gateway['paymentmethod'],'Could not determine given resource type. callback.php ' . __LINE__ . $invoiceID,'Failed');
+            exit(__LINE__.': Could not determine given resource type');
             break;
     }
 
