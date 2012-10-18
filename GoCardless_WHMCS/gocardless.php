@@ -352,22 +352,38 @@
     ** Create mod_gocardless table if it does not already exist
     **/
     function gocardless_createdb() {
+        # check the table exists
+        if(mysql_num_rows(full_query("SHOW TABLES LIKE 'mod_gocardless'"))) {
+            # the table exists, check its at the latest version
+            if(mysql_num_rows(full_query("SHOW FULL COLUMNS FROM `mod_gocardless` LIKE 'preauth_id'")) == 0) {
+                # we are running the old version of the table
+                $query = "ALTER TABLE `mod_gocardless`
+                          ADD COLUMN `setup_id` varchar(16) default NULL,
+                          ADD COLUMN `preauth_id` varchar(16) default NULL,
+                          ADD COLUMN `payment_failed` varchar(16) NOT NULL default '0',
+                          ADD CONSTRAINT UNIQUE KEY `invoiceid` (`invoiceid`),
+                          ADD CONSTRAINT UNIQUE KEY `resource_id` (`resource_id`),
+                          ADD CONSTRAINT UNIQUE KEY `setup_id` (`setup_id`)";
+                          
+                full_query($query);
+            }
+        } else {
+            # create the new table
+            $query = "CREATE TABLE IF NOT EXISTS `mod_gocardless` (
+            `id` int(11) NOT NULL auto_increment,
+            `invoiceid` int(11) NOT NULL,
+            `billcreated` int(11) default NULL,
+            `resource_id` varchar(16) default NULL,
+            `setup_id` varchar(16) default NULL,
+            `preauth_id` varchar(16) default NULL,
+            `payment_failed` tinyint(1) NOT NULL default '0',
+            PRIMARY KEY  (`id`),
+            UNIQUE KEY `invoiceid` (`invoiceid`),
+            UNIQUE KEY `resource_id` (`resource_id`),
+            UNIQUE KEY `setup_id` (`setup_id`))";
 
-        $query = "CREATE TABLE IF NOT EXISTS `mod_gocardless` (
-        `id` int(11) NOT NULL auto_increment,
-        `invoiceid` int(11) NOT NULL,
-        `billcreated` int(11) default NULL,
-        `resource_id` varchar(16) default NULL,
-        `setup_id` varchar(16) default NULL,
-        `preauth_id` varchar(16) default NULL,
-        `payment_failed` tinyint(1) NOT NULL default '0',
-        PRIMARY KEY  (`id`),
-        UNIQUE KEY `invoiceid` (`invoiceid`),
-        UNIQUE KEY `resource_id` (`resource_id`),
-        UNIQUE KEY `setup_id` (`setup_id`))";
-
-        full_query($query);
-
+            full_query($query);
+        }
     }
 
     /**
