@@ -125,9 +125,7 @@
             # update subscription ID with the resource ID on all hosting services corresponding with the invoice
             $d = select_query('tblinvoiceitems', 'relid', array('type' => 'Hosting', 'invoiceid' => $invoiceID));
             while ($res = mysql_fetch_assoc($d)) {
-                if($res['type'] == 'Hosting') {
-                    update_query('tblhosting', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
-                }
+                update_query('tblhosting', array('subscriptionid' => $pre_auth->id), array('id' => $res['relid']));
             }
 
             # clean up
