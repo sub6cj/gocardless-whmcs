@@ -5,7 +5,7 @@
     * This file confirms verifies a preauth and creates a bill underneath it
     * Either a one of payment (bill) or a pre authorisation can be handled by this file
     * @author WHMCS <info@whmcs.com>
-    * @version 0.1.0
+    * @version 0.9
     */
 
     # load all required files
