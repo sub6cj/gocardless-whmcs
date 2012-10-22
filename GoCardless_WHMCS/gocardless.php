@@ -3,7 +3,7 @@
     * GoCardless WHMCS module
     *
     * @author WHMCS <info@whmcs.com>
-    * @version 0.2.0
+    * @version 0.9
     */
 
     # load GoCardless library
