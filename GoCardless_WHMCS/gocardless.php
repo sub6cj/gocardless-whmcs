@@ -2,14 +2,14 @@
     /**
     * GoCardless WHMCS module
     *
-    * @author WHMCS <info@whmcs.com>
-    * @version 0.9
+    * @author WHMCSRC <info@whmcs.com>
+    * @version 1.0 RC
     */
 
     # load GoCardless library
     require_once ROOTDIR . '/modules/gateways/gocardless/GoCardless.php';
 
-    define('GC_VERSION', '0.9');
+    define('GC_VERSION', '1.0RC');
 
     function po($val,$kill=true) {
         echo '<pre>'.print_r($val,true);$kill ? exit : null;
