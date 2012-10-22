@@ -9,7 +9,7 @@
     # load GoCardless library
     require_once ROOTDIR . '/modules/gateways/gocardless/GoCardless.php';
 
-    define('GC_VERSION', '0.1.0');
+    define('GC_VERSION', '0.9');
 
     function po($val,$kill=true) {
         echo '<pre>'.print_r($val,true);$kill ? exit : null;
