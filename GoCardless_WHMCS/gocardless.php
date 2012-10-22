@@ -31,13 +31,13 @@
             ),
             'UsageNotes' => array(
                 'Type' => 'System',
-                'Value' => "You must set your <strong>Webhook URI</strong> within the 'Developer' > 'App Settings' tab to <strong>{$CONFIG['SystemURL']}/modules/gateways/gocardless/callback.php</strong>"
+                'Value' => "You must set your <strong>Webhook URI</strong> and <strong>Redirect URI</strong> within the 'Developer' tab on GoCardless to <strong>{$CONFIG['SystemURL']}/modules/gateways/gocardless/callback.php</strong> and <strong>{$CONFIG['SystemURL']}/modules/gateways/gocardless/redirect.php</strong> respectively. For help, please email <a href='mailto:help@gocardless.com'>help@gocardless.com</a>."
             ),
             'merchant_id' => array(
                 'FriendlyName' => 'Merchant ID',
                 'Type' => 'text',
                 'Size' => '15',
-                'Description' => '<a href="http://gocardless.com/merchants/new" target="_blank">Sign up</a> for a GoCardless account then find your API keys in the Developer tab'
+                'Description' => '<a href="http://gocardless.com/merchants/new" target="_blank">Sign up</a> for a GoCardless account then find your API keys in the Developer tab.'
             ),
             'app_id' => array(
                 'FriendlyName' => 'App ID',
@@ -78,17 +78,22 @@
             'oneoffonly' => array(
                 'FriendlyName' => 'One Off Only',
                 'Type' => 'yesno',
-                'Description' => 'Tick to only perform one off captures - no recurring pre-auth agreements'
+                'Description' => 'Tick to only perform one off captures - no recurring pre-authorization agreements will be created.'
             ),
             'instantpaid' => array(
                 'FriendlyName' => 'Instant Activation',
                 'Type' => 'yesno',
-                'Description' => 'Tick to immediately mark invoices paid after payment is initiated (despite clearing not being confirmed for 3-5 days)'
+                'Description' => 'Tick to immediately mark invoices paid after payment is initiated (despite clearing not being confirmed for 3-5 days). This means that the payment could still fail later on.'
             ),
             'test_mode' => array(
                 'FriendlyName' => 'Sandbox Mode',
                 'Type' => 'yesno',
-                'Description' => 'Tick to enable the GoCardless Sandbox Environment'
+                'Description' => 'Tick to enable the GoCardless Sandbox environment where real payments will not be taken. You will need to have set the specific sandbox keys above.'
+            ),
+            'pre_auth_maximum' => array(
+                'FriendlyName' => 'Custom pre-authorization amount',
+                'Type' => 'text',
+                'Description' => 'Use a custom amount as the maximum for the pre-authorization used. This must be an <i>integer</i> or it will be ignored. <strong>Please speak to <a href=\'mailto:help@gocardless.com\'>GoCardless support</a> before using this option.</strong>'
             )
         );
 
@@ -224,13 +229,19 @@
                 $recurringcycleunit = 'month';
                 $aRecurrings['recurringcycleperiod'] = ($aRecurrings['recurringcycleperiod']*12);
             }
+            
+            if (intval($params['pre_auth_maximum']) != 0) {
+              $pre_auth_maximum = intval($params['pre_auth_maximum']);
+            } else {
+              $pre_auth_maximum = $aRecurrings['recurringamount'];
+            }
 
             # Button title
             $title = 'Create Subscription with GoCardless';
 
             # create GoCardless preauth URL using the GoCardless library
             $url = GoCardless::new_pre_authorization_url(array(
-                    'max_amount' => $aRecurrings['recurringamount'],
+                    'max_amount' => $pre_auth_maximum,
                     # set the setup fee as the first payment amount - recurring amount
                     'setup_fee' => ($aRecurrings['firstpaymentamount'] > $aRecurrings['recurringamount']) ? ($aRecurrings['firstpaymentamount']-$aRecurrings['recurringamount']) : 0,
                     'name' => $params['description'],
