@@ -85,6 +85,15 @@ class GoCardless_Client {
       // Otherwise set it based on environment
       $this->base_url = self::$base_urls[GoCardless::$environment];
     }
+	
+	// Take redirect from array
+    if (isset($account_details['redirect_uri'])) {
+      $this->redirect_uri = $account_details['redirect_uri'];
+      unset($account_details['redirect_uri']);
+    } else {
+      // Otherwise set it based on environment
+      $this->redirect_uri = '';
+    }
 
   }
 

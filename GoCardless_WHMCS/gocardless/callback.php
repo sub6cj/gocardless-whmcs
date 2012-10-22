@@ -1,159 +1,175 @@
 <?php
 
-/**
- * GoCardless WHMCS module
- *
- * @author WHMCS <info@whmcs.com>
- * @version 0.1.0
- */
+    /**
+    * GoCardless WHMCS module
+    *
+    * @author WHMCS <info@whmcs.com>
+    * @version 0.1.0
+    */
 
-$whmcsdir = dirname(__FILE__) . '/../../../';
-require_once $whmcsdir . 'dbconnect.php';
-require_once $whmcsdir . '/includes/functions.php';
-require_once $whmcsdir . '/includes/gatewayfunctions.php';
-require_once $whmcsdir . '/includes/invoicefunctions.php';
-require_once $whmcsdir . '/modules/gateways/gocardless.php';
+    # load all required files
+    $whmcsdir = dirname(__FILE__) . '/../../../';
+    require_once $whmcsdir . 'dbconnect.php';
+    require_once $whmcsdir . '/includes/functions.php';
+    require_once $whmcsdir . '/includes/gatewayfunctions.php';
+    require_once $whmcsdir . '/includes/invoicefunctions.php';
+    require_once $whmcsdir . '/modules/gateways/gocardless.php';
 
-$gateway = getGatewayVariables('gocardless');
+    # get gateway params using WHMCS getGatewayVariables method
+    $gateway = getGatewayVariables('gocardless');
 
-if ( ! $gateway['type']) {
-  die('Module not activated.');
-}
+    # sanity check to ensure module is active
+    if (!$gateway['type']) die("Module Not Activated");
 
-GoCardless::set_account_details(array(
-  'app_id'        => $gateway['app_id'],
-  'app_secret'    => $gateway['app_secret'],
-  'merchant_id'   => $gateway['merchant_id'],
-  'access_token'  => $gateway['access_token'],
-  'ua_tag'        => 'gocardless-whmcs/v' . GC_WHMCS_VERSION
-));
+    # set relevant API information for GoCardless module
+    gocardless_set_account_details($gateway);
 
-$webhook = file_get_contents('php://input');
-$webhook_array = json_decode($webhook, true);
-$webhook_valid = GoCardless::validate_webhook($webhook_array['payload']);
+    # get the raw contents of the callback and decode JSON
+    $webhook = file_get_contents('php://input');
+    $webhook_array = json_decode($webhook, true);
 
-if ($webhook_valid == true) {
+    # validate the webhook by verifying the integrity of the payload with GoCardless
+    if(GoCardless::validate_webhook($webhook_array['payload']) !== true) {
+        # we could not validate the web hook
+        header('HTTP/1.1 400 Bad Request');
+        exit(__LINE__.': Payload could not be verified');
+    }
 
-  $val = $webhook_array['payload'];
-  $resource_type = $val['resource_type'];
-  $action = $val['action'];
+    # store various elements of the webhook array into params
+    $val = $webhook_array['payload'];
 
-  if ($action=="paid") {
+    # base what we are doing depending on the resource type
+    switch($val['resource_type']) {
 
-  foreach ($webhook_array['payload']['bills'] as $key => $val) {
+        case 'pre_authorization':
 
-    $resourceid = $val['source_id'];
-    $status = $val['status'];
-    $transid = $val['id'];
+        # handle preauths (possible actions - cancelled, expired)
+        switch($val['action']) {
 
-    $query = "SELECT gc.invoiceid AS invoiceid, i.total AS total FROM tblinvoices i, mod_gocardless gc WHERE gc.invoiceid = i.id AND gc.resource_id = '".db_escape_string($transid)."'";
-    $d = full_query($query);
-
-    if (mysql_num_rows($d)) {
-
-      $res = mysql_fetch_assoc($d);
-
-      $invoiceid = $res['invoiceid'];
-      $total = $res['total'];
-      $fee = 0;
-
-      $invoiceid = checkCbInvoiceID($invoiceid, $gateway['name']);
-      checkCbTransID($transid);
-
-      if ($status == 'paid') {
-
-        addInvoicePayment($invoiceid, $transid, $total, $fee, 'gocardless');
-        logTransaction($gateway['name'], print_r($val, 1), 'Successful');
-
-      } else {
-
-        logTransaction($gateway['name'], print_r($val, 1), 'Unsuccessful');
-
-      }
-
-    } else {
-
-      $bill = GoCardless_Bill::find($transid);
-
-      if ($status == 'paid') {
-
-        $query = "SELECT tblinvoiceitems.invoiceid,tblinvoices.userid FROM tblhosting INNER JOIN tblinvoiceitems ON tblhosting.id = tblinvoiceitems.relid INNER JOIN tblinvoices ON tblinvoices.id = tblinvoiceitems.invoiceid WHERE tblinvoices.status = 'Unpaid' AND tblhosting.subscriptionid = '$resourceid' AND tblinvoiceitems.type = 'Hosting' ORDER BY tblinvoiceitems.invoiceid ASC";
-        $d = full_query($query);
-
-        $res = mysql_fetch_array($d);
-
-        $invoiceid = $res['invoiceid'];
-        $userid = $res['userid'];
-
-        if ($invoiceid) {
-
-          $mc_gross = $bill->amount;
-
-          $m = "Invoice Found from Subscription ID Match => $invoiceid\n";
-          logTransaction('GoCardless', $m , 'Successful');
-
-          $currency = getCurrency($userid);
-
-          $result = select_query('tblcurrencies', '', array('code' => 'GBP'));
-          $data = mysql_fetch_assoc($result);
-
-          $currencyid = $data['id'];
-          $currencyconvrate = $data['rate'];
-
-          if ($currencyid != $currency['id']) {
-            $mc_gross = convertCurrency($mc_gross, $currencyid, $currency['id']);
-            $mc_fee = 0;
-          }
-
-          addInvoicePayment($invoiceid, $transid, $mc_gross, $mc_fee, 'gocardless');
-
-          $result = select_query('tblinvoiceitems', '', array('invoiceid' => $invoiceid, 'type' => 'Hosting'));
-          $data = mysql_fetch_array($result);
-
-          $relid = $data['relid'];
-          update_query('tblhosting', array('subscriptionid' => $resourceid), array('id' => $relid));
-
-          exit;
-
+            # handle cancelled or expired preauths
+            case 'cancelled':
+            case 'expired':
+                # delete related preauths
+                foreach ($val['pre_authorizations'] as $aPreauth) {
+                    # find preauth in tblhosting and empty out the subscriptionid field
+                    update_query('tblhosting',array('subscriptionid' => ''),array('subscriptionid'    => $aPreauth['id']));
+                    # log each preauth that has been cancelled
+                    logTransaction($gateway['paymentmethod'],'GoCardless Preauthorisation Cancelled ('.$aPreauth['id'].')','Cancelled');
+                }
+                break;
+            default:
+                # we cannot handle this request
+                header('HTTP/1.1 400 Bad Request');
+                exit(__LINE__.': Unknown pre-authorisation action');
+                break;
         }
 
-      } else {
+        break;
+        case 'bill':
 
-        $m .= print_r($val, 1);
-        logTransaction($gateway['name'], $m, 'Incomplete');
-        exit;
+        # handle bills (possible actions - created, failed, paid, withdrawn, refunded)
+        switch($val['action']) {
 
-      }
+            case 'paid':
+                # loop through batch of bills and process appropriately, adding the
+                # bill amount to the invoice once complete
+                foreach($val['bills'] as $aBill) {
 
+                    # get the associated invoiceID based on the bill ID
+                    $invoiceID = mysql_result(full_query("SELECT `invoiceid` FROM `mod_gocardless` WHERE `resource_id` = '".mysql_real_escape_string($aBill['id'])."' OR `setup_id` = '".mysql_real_escape_string($aBill['id'])."'"),0,0);
+
+                    # verify we have been able to get the invoice ID
+                    if($invoiceID) {
+
+                        # get the userID to process the currency
+                        $userID = mysql_result(select_query('tblinvoices','userid',array('id' => $invoiceID)),0,0);
+
+                        # verify the invoice ID (to ensure it exists) and transaction ID to ensure it is unique
+                        checkCBInvoiceID($invoiceID, $gateway['paymentmethod']);
+                        checkCBTransID($aBill['id']);
+
+                        # calculate GoCardless fees
+                        $aBill['fees'] = ($aBill['amount'] - $aBill['amount_minus_fees']);
+
+                        # convert the currency where necessary
+                        $aCurrency = getCurrency($userID);
+                        if($gateway['convertto'] && ($aCurrency['id'] != $gateway['convertto'])) {
+                            # the users currency is not the same as the GoCardless currency, convert to the users currency
+                            $aBill['amount'] = convertCurrency($aBill['amount'],$gateway['convertto'],$aCurrency['id']);
+                            $aBill['fees']   = convertCurrency($aBill['fees'],$gateway['convertto'],$aCurrency['id']);
+                        }
+
+                        # if we get to this point, we have verified the callback and performed sanity checks
+                        # add a payment to the invoice and create a transaction log
+                        addInvoicePayment($invoiceID, $aBill['id'], $aBill['amount'], $aBill['fees'], $gateway['paymentmethod']);
+                        logTransaction($gateway['paymentmethod'], 'Bill payment completed ('.$aBill['id'].'). Invoice #'.$invoiceID, 'Successful');
+                        
+                        # clean up for next loop
+                        unset($invoiceID,$userID);
+
+                    } else {
+                        header('HTTP/1.1 400 Bad Request');
+                        logTransaction($gateway['paymentmethod'],'Could not find invoice with ID. callback.php ' . __LINE__ . $invoiceID,'Failed');
+                        exit(__LINE__.': Could not get invoice ID for ' . htmlentities($aBill['id']));
+                    }
+
+                }
+                break;
+
+            case 'failed':
+            case 'refunded':
+                # loop through each bill that has failed or been refunded
+                foreach($val['bills'] as $aBill) {
+
+                    # attempt to obtain the mod_gocardless record
+                    $invoiceID = mysql_result(full_query("SELECT `invoiceid` FROM `mod_gocardless` WHERE `resource_id` = '".mysql_real_escape_string($aBill['id'])."' OR `setup_id` = '".mysql_real_escape_string($aBill['id'])."'"),0,0);
+
+                    # verify we have been able to get the invoice ID
+                    if($invoiceID) {
+
+                        # load the corresponding invoice in $aInvoice array
+                        $aInvoice = mysql_fetch_assoc(select_query('tblinvoices','status',array('id' => $invoiceID)));
+
+                        # mark the GoCardless record as failed (this will be displayed on the admin invoice page)
+                        full_query("UPDATE `mod_gocardless` SET `payment_failed` = 1 WHERE `resource_id` = '".mysql_real_escape_string($aBill['id'])."' OR `setup_id` = '".mysql_real_escape_string($aBill['id'])."' AND `payment_failed` = '0'");
+
+                        # check if the invoice is marked as paid already
+                        if($aInvoice['status'] == 'Paid') {
+                            # the invoice is marked as paid already (mark as paid instantly)
+                            update_query('tblinvoices', array('status' => 'Unpaid'), array('id' => $invoiceID));
+                        }
+                        
+                        # update the corresponding transaction to mark as FAIL and mark the invoice as unpaid
+                        update_query('tblaccounts', array('amountin' => "0", 'fees' => "0", 'transid' => (($val['action'] == 'failed') ? 'FAIL_' : 'REFUND_') . $aBill['id']),array('invoiceid' => $invoiceID, 'transid' => $aBill['id']));
+
+                        # log the failed/refunded transaction in the gateway log as status 'Payment Failed/Refunded'
+                        logTransaction($gateway['paymentmethod'],"GoCardless Payment {$val['action']}.\r\nPreauth ID: {$aBill['source_id']}\nBill ID: {$aBill['id']}: " . print_r($aBill,true),'Bill ' . ucfirst($val['action']));
+                        
+                        # clean up for next loop
+                        unset($invoiceID,$userID);
+                        
+                    } else {
+                        header('HTTP/1.1 400 Bad Request');
+                        logTransaction($gateway['paymentmethod'],'Could not find invoice with ID. callback.php ' . __LINE__ . $invoiceID,'Failed');
+                        exit;
+                    }
+                }
+                break;
+
+            case 'created':
+                # we dont want to handle created bills
+                foreach($val['bills'] as $aBill) {
+                    logTransaction($gateway['paymentmethod'],'GoCardless Bill Created ('.$aBill['id'].')','Bill Created');
+                }
+                break;
+        }
+        break;
+        default:
+            header('HTTP/1.1 400 Bad Request');
+            logTransaction($gateway['paymentmethod'],'Could not determine given resource type. callback.php ' . __LINE__ . $invoiceID,'Failed');
+            exit(__LINE__.': Could not determine given resource type');
+            break;
     }
 
-  }
-  // end foreach
-
-  } elseif ($action=="cancelled") {
-
-    foreach ($webhook_array['payload']['subscriptions'] as $key => $val) {
-
-        $id = $val['id'];
-
-        delete_query("mod_gocardless",array("resource_id"=>$resource_id));
-
-    }
-
-    foreach ($webhook_array['payload']['pre_authorizations'] as $key => $val) {
-
-        $id = $val['id'];
-
-        delete_query("mod_gocardless",array("resource_id"=>$resource_id));
-
-    }
-
-  }
-
-  header('HTTP/1.1 200 OK');
-
-} else {
-
-  header('HTTP/1.1 403 Invalid signature');
-
-}
+    # if we get to this point we are done
+    header('HTTP/1.1 200 OK');
