@@ -8,13 +8,26 @@ The GoCardless WHMCS module provides a simple way to use GoCardless from within 
 
 You must have WHMCS version 5.1.2 or later to use this WHMCS module.
 
-## Installing
+## Getting started
 
-First [download this module](https://github.com/gocardless/gocardless-whmcs/zipball/master).
+1. [Download](https://github.com/gocardless/gocardless-whmcs/zipball/master) the latest version of the module.
+2. Unzip the downloaded archive
+3. Copy the contents of the GoCardless_WHMCS directory into `your_whmcs_install/modules/gateways` so that it replaces the existing version
+4. Follow our [dedicated guide](https://gocardless.com/partners/whmcs) to using the module on the GoCardless site
 
-Next, copy the contents (not the folder itself) of GoCardless_WHMCS into your_whmcs_install/modules/gateways/
+## Support
 
-## Use
+For help with using this module, contact the GoCardless support team at <help@gocardless.com>.
 
-For instructions on using the module, refer to
-[using GoCardless with WHMCS](https://gocardless.com/partners/whmcs).
+## Changelog
+
+__v1.0__
+
+* Adds support for setup fees, allowing one-off products at the beginning of a recurring package
+* Support for GoCardless Sandbox mode
+* Added "Instant Activation" option to mark payments as paid straight away, rather than waiting for feedback from GoCardless
+* Reliability improvements and bug fixes
+
+__v.01__
+
+* Initial release
