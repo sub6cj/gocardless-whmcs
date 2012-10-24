@@ -3,13 +3,13 @@
     * GoCardless WHMCS module
     *
     * @author WHMCSRC <info@whmcs.com>
-    * @version 1.0
+    * @version 1.0.1
     */
 
     # load GoCardless library
     require_once ROOTDIR . '/modules/gateways/gocardless/GoCardless.php';
 
-    define('GC_VERSION', '1.0');
+    define('GC_VERSION', '1.0.1');
 
     function po($val,$kill=true) {
         echo '<pre>'.print_r($val,true);$kill ? exit : null;
@@ -320,7 +320,7 @@
                         # log this in the transaction log and exit out
                         update_query('mod_gocardless', array('payment_failed' => 1),array('invoiceid' => $params['invoiceid']));
                         logTransaction($params['paymentmethod'],"Failed to create GoCardless bill: " . print_r($e,true) . print_r($bill,true),'Failed');
-                        exit;
+                        return array('status' => 'error', 'rawdata' => $e);
                     }
 
                     # check that the bill has been created
@@ -331,6 +331,7 @@
                             # Add the bill ID to the table and mark the transaction as pending
                             insert_query('mod_gocardless', array('invoiceid' => $params['invoiceid'], 'billcreated' => 1, 'resource_id' => $bill->id, 'preauth_id'  => $pre_auth->id));
                             logTransaction('GoCardless', 'Transaction initiated successfully, confirmation will take 2-5 days' . "\nPreAuth: " . $pre_auth->id . "\nBill ID: " . $bill->id, 'Pending');
+                            return array('status' => 'Bill Created', 'rawdata' => $bill);
                         } else {
                             # update the table with the bill ID
                             update_query('mod_gocardless', array('billcreated' => 1, 'resource_id' => $bill->id), array('invoiceid' => $params['invoiceid']));
@@ -340,6 +341,7 @@
                 } else {
                     # PreAuth could not be verified
                     logTransaction('GoCardless','Pre-Authorisation could not be verified','Incomplete');
+                    return array('status' => 'Pre-Authorisation could not be verified', 'rawdata' => array('message' => 'No pre-authorisation ID found in WHMCS'));
                 }
 
 
@@ -348,6 +350,7 @@
                 # the client will have to setup a new preauth to begin recurring payments again
                 # or pay using an alternative method
                 logTransaction('GoCardless', 'No pre-authorisation found', 'Incomplete');
+                return array('status' => 'No Pre-auth Found', 'rawdata' => array('message' => 'No pre-authorisation ID found in WHMCS'));
             }
 
         }

@@ -21,6 +21,10 @@ For help with using this module, contact the GoCardless support team at <help@go
 
 ## Changelog
 
+__v1.0.1__
+
+* Updates the WHMCS cron so any issues whilst collecting do not affect other payment gateways
+
 __v1.0__
 
 * Adds support for setup fees, allowing one-off products at the beginning of a recurring package
