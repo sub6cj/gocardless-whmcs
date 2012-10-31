@@ -256,7 +256,7 @@
 
             # return the recurring preauth button code
             $sButton =  (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . 'When you get to GoCardless you will see an agreement for the <b>maximum possible amount</b> we\'ll ever need to charge you in a single invoice for this order, with a frequency of the shortest item\'s billing cycle. But rest assured we will never charge you more than the actual amount due.
-            <br /><a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
+            <br /><a onclick="window.location=\''.$url.'\';" href="'.$url.'" style="text-decoration: none"><input type="button" onclick="window.location=\''.$url.'\';" value="'.$title.'" /></a>';
 
         }
 
