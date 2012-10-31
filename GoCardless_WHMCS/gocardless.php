@@ -215,7 +215,7 @@
                 ));
 
             # return one time payment button code
-            $sButton = (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . '<a href="'.$url.'" style="text-decoration: none"><input type="button" value="'.$title.'" /></a>';
+              $sButton = (GoCardless::$environment == 'sandbox' ? '<strong style="color: #FF0000; font-size: 16px;">SANDBOX MODE</strong><br />' : null) . '<a href="'.$url.'" onclick="window.location=\''.$url.'\';" style="text-decoration: none"><input onclick="window.location=\''.$url.'\';" type="button" value="'.$title.'" /></a>';
 
         } else {
             # we are setting up a preauth (description friendly name), display the appropriate code
