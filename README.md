@@ -21,6 +21,10 @@ For help with using this module, contact the GoCardless support team at <help@go
 
 ## Changelog
 
+__v1.0.3__
+
+* Fixes an issue with connection to our SSL service experienced on some environments
+
 __v1.0.2__
 
 * Fixes issue with the GoCardless payment button in Internet Explorer - only affects a subset of WHMCS installations

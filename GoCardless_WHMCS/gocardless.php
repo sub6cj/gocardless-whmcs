@@ -3,13 +3,13 @@
     * GoCardless WHMCS module
     *
     * @author WHMCSRC <info@whmcs.com>
-    * @version 1.0.2
+    * @version 1.0.3
     */
 
     # load GoCardless library
     require_once ROOTDIR . '/modules/gateways/gocardless/GoCardless.php';
 
-    define('GC_VERSION', '1.0.2');
+    define('GC_VERSION', '1.0.3');
 
     function po($val,$kill=true) {
         echo '<pre>'.print_r($val,true);$kill ? exit : null;
@@ -55,7 +55,7 @@
                 'Size' => '100'
             ),
             'dev_merchant_id' => array(
-                'FriendlyName' => 'Sandbox Merchant ID', 
+                'FriendlyName' => 'Sandbox Merchant ID',
                 'Type' => 'text',
                 'Size' => '15',
                 'Description' => 'Use your GoCardless login details to access the <a href="http://sandbox.gocardless.com/" target="_blank">Sandbox</a> and then find your API keys in the Developer tab'
@@ -178,7 +178,7 @@
 
         # check a number of conditions to see if it is possible to setup a preauth
         if(($params['oneoffonly'] == 'on') ||
-            ($aRecurrings === false) || 
+            ($aRecurrings === false) ||
             ($aRecurrings['recurringamount'] <= 0)) {
             $noPreauth = true;
         } else {
@@ -222,14 +222,14 @@
 
             # get the invoice from the database because we need the invoice creation date
             $aInvoice = mysql_fetch_assoc(select_query('tblinvoices','date',array('id' => $params['invoiceid'])));
-            
+
             # GoCardless only supports months in the billing period so
             # if WHMCS is sending a year value we need to address this
             if($recurringcycleunit == 'year') {
                 $recurringcycleunit = 'month';
                 $aRecurrings['recurringcycleperiod'] = ($aRecurrings['recurringcycleperiod']*12);
             }
-            
+
             if (intval($params['pre_auth_maximum']) != 0) {
               $pre_auth_maximum = intval($params['pre_auth_maximum']);
             } else {
@@ -378,7 +378,7 @@
                           ADD CONSTRAINT UNIQUE KEY `invoiceid` (`invoiceid`),
                           ADD CONSTRAINT UNIQUE KEY `resource_id` (`resource_id`),
                           ADD CONSTRAINT UNIQUE KEY `setup_id` (`setup_id`)";
-                          
+
                 full_query($query);
             }
         } else {
