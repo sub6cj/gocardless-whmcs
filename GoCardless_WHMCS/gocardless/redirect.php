@@ -56,11 +56,12 @@
     # split invoice data into invoiceID and invoiceAmount
     list($invoiceID) = explode(':', $_GET['state']);
 
-    # get the invoice amount and user ID by querying the invoice table
-    list($userID,$invoiceAmount) = mysql_result(select_query('tblinvoices','userid,total',array('id' => $invoiceID)),0,0);
-
     # check we have the invoiceID
     if($invoiceID) {
+        # get the invoice amount and user ID by querying the invoice table
+        $aResult = mysql_fetch_array(select_query('tblinvoices','userid,total',array('id' => $invoiceID)));
+        $userID = $aResult['userid'];
+        $invoiceAmount = $aResult['total'];
 
         # check this invoice exists (halt execution if it doesnt)
         checkCbInvoiceID($invoiceID, $gateway['paymentmethod']);
