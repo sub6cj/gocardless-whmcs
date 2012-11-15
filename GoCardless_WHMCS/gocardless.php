@@ -23,7 +23,7 @@
     function gocardless_config() {
 
         global $CONFIG;
-        if (!empty($CONFIG['SystemSSLURL'] && $CONFIG['SystemSSLURL'] != "") {
+        if (!empty($CONFIG['SystemSSLURL']) && $CONFIG['SystemSSLURL'] != "") {
             $systemUrl = $CONFIG['SystemSSLURL'];
         } else {
             $systemUrl = $CONFIG['SystemURL'];
@@ -126,7 +126,7 @@
             throw new Exception('Could not get GoCardless params');
         }
 
-        if (!empty($CONFIG['SystemSSLURL'] && $CONFIG['SystemSSLURL'] != "") {
+        if (!empty($CONFIG['SystemSSLURL']) && $CONFIG['SystemSSLURL'] != "") {
             $systemUrl = $CONFIG['SystemSSLURL'];
         } else {
             $systemUrl = $CONFIG['SystemURL'];
