@@ -23,6 +23,11 @@
     function gocardless_config() {
 
         global $CONFIG;
+        if (!empty($CONFIG['SystemSSLURL'] && $CONFIG['SystemSSLURL'] != "") {
+            $systemUrl = $CONFIG['SystemSSLURL'];
+        } else {
+            $systemUrl = $CONFIG['SystemURL'];
+        }
 
         $aConfig = array(
             'FriendlyName' => array(
@@ -31,7 +36,7 @@
             ),
             'UsageNotes' => array(
                 'Type' => 'System',
-                'Value' => "You must set your <strong>Webhook URI</strong> and <strong>Redirect URI</strong> within the 'Developer' tab on GoCardless to <strong>{$CONFIG['SystemURL']}/modules/gateways/gocardless/callback.php</strong> and <strong>{$CONFIG['SystemURL']}/modules/gateways/gocardless/redirect.php</strong> respectively. For help, please email <a href='mailto:help@gocardless.com'>help@gocardless.com</a>."
+                'Value' => "You must set your <strong>Webhook URI</strong> and <strong>Redirect URI</strong> within the 'Developer' tab on GoCardless to <strong>{$systemUrl}/modules/gateways/gocardless/callback.php</strong> and <strong>{$systemUrl}/modules/gateways/gocardless/redirect.php</strong> respectively. For help, please email <a href='mailto:help@gocardless.com'>help@gocardless.com</a>."
             ),
             'merchant_id' => array(
                 'FriendlyName' => 'Merchant ID',
@@ -121,6 +126,12 @@
             throw new Exception('Could not get GoCardless params');
         }
 
+        if (!empty($CONFIG['SystemSSLURL'] && $CONFIG['SystemSSLURL'] != "") {
+            $systemUrl = $CONFIG['SystemSSLURL'];
+        } else {
+            $systemUrl = $CONFIG['SystemURL'];
+        }
+
         # check if we are running in Sandbox mode (test_mode)
         if($params['test_mode'] == 'on') {
             # Initialise SANDBOX Account Details
@@ -130,7 +141,7 @@
                     'app_secret'    => $params['dev_app_secret'],
                     'merchant_id'   => $params['dev_merchant_id'],
                     'access_token'  => $params['dev_access_token'],
-                    'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+                    'redirect_uri'  => $systemUrl.'/modules/gateways/gocardless/redirect.php',
                     'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
                 ));
         } else {
@@ -141,7 +152,7 @@
                     'app_secret'    => $params['app_secret'],
                     'merchant_id'   => $params['merchant_id'],
                     'access_token'  => $params['access_token'],
-                    'redirect_uri'  => $CONFIG['SystemURL'].'/modules/gateways/gocardless/redirect.php',
+                    'redirect_uri'  => $systemUrl.'/modules/gateways/gocardless/redirect.php',
                     'ua_tag'        => 'gocardless-whmcs/v' . GC_VERSION
                 ));
         }
