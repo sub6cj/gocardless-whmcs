@@ -54,7 +54,10 @@
     }
 
     # split invoice data into invoiceID and invoiceAmount
-    list($invoiceID,$invoiceAmount) = explode(':', $_GET['state']);
+    list($invoiceID) = explode(':', $_GET['state']);
+
+    # get the invoice amount and user ID by querying the invoice table
+    list($userID,$invoiceAmount) = mysql_result(select_query('tblinvoices','userid,total',array('id' => $invoiceID)),0,0);
 
     # check we have the invoiceID
     if($invoiceID) {
@@ -63,7 +66,6 @@
         checkCbInvoiceID($invoiceID, $gateway['paymentmethod']);
 
         # get user ID and gateway ID for use further down the script
-        $userID = mysql_result(select_query('tblinvoices','userid',array('id' => $invoiceID)),0,0);
         $gatewayID = mysql_result(select_query('tblclients', 'gatewayid', array('id' => $userID)),0,0);
 
         # if the user records gateway is blank, set it to gocardless
