@@ -364,6 +364,12 @@
                 return array('status' => 'No Pre-auth Found', 'rawdata' => array('message' => 'No pre-authorisation ID found in WHMCS'));
             }
 
+        } else {
+            # WHMCS is trying to collect the bill but one has already been created - this happens because the bill is not mark as 'paid'
+            # until a web hook is received by default, so WHMCS thinks it still needs to collect.
+            logTransaction('GoCardless', 'Bill already created - awaiting update via web hook...' . "\nBill ID: " . $existing_payment['resource_id'], 'Pending');
+            return array('status' => 'Bill already created - awaiting update via web hook...', 'rawdata' =>
+                array('message' => 'Bill already created - awaiting update via web hook...'));
         }
 
     }
