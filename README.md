@@ -21,6 +21,13 @@ For help with using this module, contact the GoCardless support team at <help@go
 
 ## Changelog
 
+__v1.0.4__
+
+* Fixes an issue where the first payment amount differs from the recurring amount
+* Improves support for WHMCS installations with SSL enabled
+* Improves logging where WHMCS tries to capture payment for an invoice which
+already has a pending bill on GoCardless
+
 __v1.0.3__
 
 * Fixes an issue with connection to our SSL service experienced on some environments

@@ -4,7 +4,7 @@
     * GoCardless WHMCS module
     *
     * @author WHMCS <info@whmcs.com>
-    * @version 1.0.3
+    * @version 1.0.4
     */
 
     # load all required files
