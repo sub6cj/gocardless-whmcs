@@ -36,7 +36,7 @@
             ),
             'UsageNotes' => array(
                 'Type' => 'System',
-                'Value' => "You must set your <strong>Webhook URI</strong> and <strong>Redirect URI</strong> within the 'Developer' tab on GoCardless to <strong>{$systemUrl}/modules/gateways/gocardless/callback.php</strong> and <strong>{$systemUrl}/modules/gateways/gocardless/redirect.php</strong> respectively. For help, please email <a href='mailto:help@gocardless.com'>help@gocardless.com</a>."
+                'Value' => "You must set your <strong>Webhook URI</strong> and <strong>Redirect URI</strong> within the 'Developer' tab on GoCardless to <strong>{$systemUrl}/modules/gateways/gocardless/callback.php</strong> and <strong>{$systemUrl}/modules/gateways/gocardless/redirect.php</strong> respectively.<br /><br />A full guide to configuring WHMCS with GoCardless is available <a href='https://gocardless.com/partners/whmcs-detailed'>here</a>. For help, please email <a href='mailto:help@gocardless.com'>help@gocardless.com</a>."
             ),
             'merchant_id' => array(
                 'FriendlyName' => 'Merchant ID',
