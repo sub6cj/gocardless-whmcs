@@ -289,6 +289,9 @@
         # Send the relevant API information to the GoCardless class for future processing
         gocardless_set_account_details($params);
 
+        # Load the gateway settings
+        $gateway = getGatewayVariables('gocardless');
+
         # check against the database if the bill relevant to this invoice has already been created
         $existing_payment_query = select_query('mod_gocardless', 'resource_id', array('invoiceid' => $params['invoiceid']));
         $existing_payment = mysql_fetch_assoc($existing_payment_query);
@@ -341,7 +344,12 @@
                         if (!mysql_num_rows($existing_payment_query)) {
                             # Add the bill ID to the table and mark the transaction as pending
                             insert_query('mod_gocardless', array('invoiceid' => $params['invoiceid'], 'billcreated' => 1, 'resource_id' => $bill->id, 'preauth_id'  => $pre_auth->id));
+                            if($gateway['instantpaid'] == 'on') {
+                                addInvoicePayment($params['invoiceid'], $bill->id, $bill->amount, $bill->gocardless_fees, $gateway['paymentmethod']);
+                                logTransaction($gateway['paymentmethod'], 'GoCardless Bill ('.$bill->id.')Instant Paid: (Invoice #'.$params['invoiceid'].')' . print_r($bill, true), 'Successful');
+                            } else {
                             logTransaction('GoCardless', 'Transaction initiated successfully, confirmation will take 2-5 days' . "\nPreAuth: " . $pre_auth->id . "\nBill ID: " . $bill->id, 'Pending');
+                            }
                             return array('status' => 'Bill Created', 'rawdata' => $bill);
                         } else {
                             # update the table with the bill ID
