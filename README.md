@@ -21,6 +21,11 @@ For help with using this module, contact the GoCardless support team at <help@go
 
 ## Changelog
 
+__v1.0.5__
+
+* Allows subsequent bills after the first one to be instantly marked as 'paid'
+where the relevant setting is enabled
+
 __v1.0.4__
 
 * Fixes an issue where the first payment amount differs from the recurring amount
