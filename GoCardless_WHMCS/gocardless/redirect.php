@@ -94,7 +94,11 @@
 
             # create a GoCardless bill and store it in $bill
             try {
-                $oBill = $pre_auth->create_bill(array('amount' => $invoiceAmount));
+                $bill_details = array(
+                    'name' => 'Payment for invoice ' . $invoiceID,
+                    'amount' => $invoiceAmount
+                );
+                $oBill = $pre_auth->create_bill($bill_details);
             } catch (Exception $e) {
                 # log that we havent been able to create the bill and exit out
                 logTransaction($gateway['paymentmethod'],'Failed to create new bill: ' . print_r($e,true),'GoCardless Error');

@@ -328,7 +328,11 @@
 
                     # Create a bill with the $pre_auth object
                     try {
-                        $bill = $pre_auth->create_bill(array('amount' => $params['amount']));
+                        $bill_details = array(
+                            'name' => 'Payment for invoice ' . $params['invoiceid'],
+                            'amount' => $params['amount']
+                        );
+                        $bill = $pre_auth->create_bill($bill_details);
                     } catch (Exception $e) {
                         # we failed to create a new bill, lets update mod_gocardless to alert the admin why payment hasnt been received,
                         # log this in the transaction log and exit out

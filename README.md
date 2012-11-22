@@ -23,6 +23,7 @@ For help with using this module, contact the GoCardless support team at <help@go
 
 __v1.0.5__
 
+* Adds a description to bills created against a pre-auth with the invoice number
 * Allows subsequent bills after the first one to be instantly marked as 'paid'
 where the relevant setting is enabled
 
