@@ -338,7 +338,6 @@
                         # log this in the transaction log and exit out
                         update_query('mod_gocardless', array('payment_failed' => 1),array('invoiceid' => $params['invoiceid']));
                         logTransaction($params['paymentmethod'],"Failed to create GoCardless bill: " . print_r($e,true) . print_r($bill,true),'Failed');
-                        return array('status' => 'error', 'rawdata' => $e);
                     }
 
                     # check that the bill has been created
