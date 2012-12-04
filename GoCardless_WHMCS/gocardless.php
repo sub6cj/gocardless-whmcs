@@ -36,7 +36,7 @@
             ),
             'UsageNotes' => array(
                 'Type' => 'System',
-                'Value' => "You must set your <strong>Webhook URI</strong> and <strong>Redirect URI</strong> within the 'Developer' tab on GoCardless to <strong>{$systemUrl}/modules/gateways/gocardless/callback.php</strong> and <strong>{$systemUrl}/modules/gateways/gocardless/redirect.php</strong> respectively.<br /><br />A full guide to configuring WHMCS with GoCardless is available <a href='https://gocardless.com/partners/whmcs-detailed'>here</a>. For help, please email <a href='mailto:help@gocardless.com'>help@gocardless.com</a>."
+                'Value' => "You must set your <strong>Webhook URI</strong> and <strong>Redirect URI</strong> within the 'Developer' tab on GoCardless to <strong>{$systemUrl}/modules/gateways/gocardless/callback.php</strong> and <strong>{$systemUrl}/modules/gateways/gocardless/redirect.php</strong> respectively.<br /><br />A full guide to configuring WHMCS with GoCardless is available <a href='https://gocardless.com/partners/whmcs-detailed'>here</a>. For help, please email <a href='mailto:help@gocardless.com'>help@gocardless.com</a>. <i>You're running version " . GC_VERSION . "."
             ),
             'merchant_id' => array(
                 'FriendlyName' => 'Merchant ID',
@@ -379,9 +379,7 @@
         } else {
             # WHMCS is trying to collect the bill but one has already been created - this happens because the bill is not mark as 'paid'
             # until a web hook is received by default, so WHMCS thinks it still needs to collect.
-            logTransaction('GoCardless', 'Bill already created - awaiting update via web hook...' . "\nBill ID: " . $existing_payment['resource_id'], 'Pending');
-            return array('status' => 'Bill already created - awaiting update via web hook...', 'rawdata' =>
-                array('message' => 'Bill already created - awaiting update via web hook...'));
+            # logTransaction('GoCardless', 'Bill already created - awaiting update via web hook...' . "\nBill ID: " . $existing_payment['resource_id'], 'Pending');
         }
 
     }
